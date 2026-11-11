@@ -9,7 +9,7 @@ Desk Draw is a menu bar app for macOS 14 or later on Apple Silicon.
 
 ## Install
 
-Download `Desk-Draw-0.2.0.zip` from the [latest release](https://github.com/techno-cowboy/desk-draw/releases/latest),
+Download the app ZIP from the [latest release](https://github.com/techno-cowboy/desk-draw/releases/latest),
 unzip it and move `Desk Draw.app` to Applications. The app is not notarized, so macOS blocks the
 first launch. To allow it, go to System Settings → Privacy & Security and click **Open Anyway**, or
 run `xattr -dr com.apple.quarantine "/Applications/Desk Draw.app"`. You can also build it yourself
@@ -48,6 +48,18 @@ display, stop drawing, move your mouse there, and start again.
 | ⌘S | Save screenshot |
 | Esc | Stop drawing |
 
+## Updates
+
+Starting with version 0.3.0, Desk Draw uses [Sparkle](https://sparkle-project.org/) to check for and
+install updates. The menu bar menu includes **Check for Updates…** and separate switches for
+automatic checking and automatic downloading/installing. Both default to on; your choices are
+remembered. A pending restart waits until you finish drawing.
+
+Versions 0.1.0 and 0.2.0 need one manual update: quit Desk Draw, download the new ZIP, and replace
+the existing app. Future updates can be installed from the app. The update feed and downloads are
+signed independently of the app's macOS code signature. Ad-hoc builds may still need renewed
+Screen Recording permission after an update.
+
 ## Screenshots and their context
 
 Screenshots go to `~/Pictures/Desk Draw/` and are copied to the clipboard. Each one records:
@@ -81,6 +93,13 @@ Screen Recording.
 
 `DeskDraw --render-sample out.png` renders a test screenshot from a synthetic display. Use it to
 check drawing and coordinate math without Screen Recording permission.
+
+Run `swift test` for the AppKit regression tests. After building the app, run
+`./scripts/test-updates.py` to exercise a real Sparkle install/relaunch and rejection of tampered
+feeds and archives using disposable apps on localhost.
+
+See [Release process](docs/RELEASING.md) for signing keys, Developer ID signing, notarization, and
+preparing the signed update feed.
 
 ## License
 

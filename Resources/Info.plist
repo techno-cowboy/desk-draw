@@ -19,9 +19,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>0.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
@@ -29,6 +29,18 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Desk Draw reads the current browser tab's URL and title to add them to your screenshot's context.</string>
 	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/techno-cowboy/desk-draw/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>622EnbGf/vA1VDgJ38LHETFjGHau4fSCKlHsroMfCyI=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
 	<true/>
 </dict>
 </plist>

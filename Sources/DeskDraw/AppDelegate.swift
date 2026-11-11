@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var session: DrawingSession?
     private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
+    private let updater = AppUpdater()
 
     static let hotKeyLabel = "⌥⇧D"
 
@@ -19,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
+        updater.isDrawing = { [weak self] in self?.session != nil }
+        updater.start()
 
         hotKey = HotKey(keyCode: kVK_ANSI_D, modifiers: optionKey | shiftKey) { [weak self] in
             self?.toggleDrawing()
@@ -39,7 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let session = DrawingSession(state: state)
-        session.onEnd = { [weak self] in self?.session = nil }
+        session.onEnd = { [weak self] in
+            self?.session = nil
+            self?.updater.drawingDidEnd()
+        }
         self.session = session
         session.start()
     }
@@ -64,6 +70,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item("Allow Screen Recording…", #selector(openScreenRecordingSettings)))
         }
 
+        menu.addItem(.separator())
+        menu.addItem(sectionHeader("Updates"))
+        let checkUpdates = item("Check for Updates…", #selector(AppUpdater.checkForUpdates(_:)))
+        checkUpdates.target = updater
+        checkUpdates.isEnabled = updater.canCheckForUpdates
+        menu.addItem(checkUpdates)
+        let autoChecks = toggle("Check for Updates Automatically", updater.automaticallyChecksForUpdates,
+                                #selector(AppUpdater.toggleAutomaticChecks(_:)))
+        autoChecks.target = updater
+        autoChecks.isEnabled = updater.isAvailable
+        menu.addItem(autoChecks)
+        let autoInstall = toggle("Download and Install Updates Automatically", updater.automaticallyDownloadsUpdates,
+                                 #selector(AppUpdater.toggleAutomaticDownloads(_:)))
+        autoInstall.target = updater
+        autoInstall.isEnabled = updater.isAvailable && updater.automaticallyChecksForUpdates
+        menu.addItem(autoInstall)
         menu.addItem(.separator())
         menu.addItem(item("Shortcuts…", #selector(showShortcuts)))
         menu.addItem(NSMenuItem(title: "Quit Desk Draw", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))

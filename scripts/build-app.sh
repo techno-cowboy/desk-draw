@@ -5,11 +5,22 @@ cd "$(dirname "$0")/.."
 
 APP="build/Desk Draw.app"
 
+if [[ -n "${1:-}" && "$1" != "--install" ]]; then
+  echo "Usage: $0 [--install]" >&2
+  exit 1
+fi
+if [[ -n "${DESKDRAW_NOTARY_PROFILE:-}" && "${DESKDRAW_SIGN_IDENTITY:--}" == "-" ]]; then
+  echo "Notarization requires DESKDRAW_SIGN_IDENTITY (Developer ID Application)." >&2
+  exit 1
+fi
+
 swift build -c release
+BIN=$(swift build -c release --show-bin-path)
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/DeskDraw "$APP/Contents/MacOS/DeskDraw"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+cp "$BIN/DeskDraw" "$APP/Contents/MacOS/DeskDraw"
+ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # Icon: render once, cache in build/.
@@ -26,9 +37,19 @@ if [[ ! -f build/AppIcon.icns ]]; then
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# Ad-hoc signature. macOS ties the Screen Recording permission to it, so after
-# a rebuild you may need to re-enable Desk Draw in System Settings.
-codesign --force --sign - "$APP"
+# Defaults to ad-hoc signing; set DESKDRAW_SIGN_IDENTITY for Developer ID releases.
+./scripts/sign-app.sh "$APP"
+
+if [[ -n "${DESKDRAW_NOTARY_PROFILE:-}" ]]; then
+  NOTARY_ARCHIVE=$(mktemp build/.notarize.XXXXXXXX.zip)
+  trap 'rm -f "$NOTARY_ARCHIVE"' EXIT
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARY_ARCHIVE"
+  xcrun notarytool submit "$NOTARY_ARCHIVE" --keychain-profile "$DESKDRAW_NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  codesign --verify --deep --strict "$APP"
+  spctl --assess --type execute "$APP"
+fi
 
 echo "Built $APP"
 
@@ -36,7 +57,7 @@ if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "$HOME/Applications"
   pkill -x DeskDraw 2>/dev/null || true
   rm -rf "$HOME/Applications/Desk Draw.app"
-  cp -R "$APP" "$HOME/Applications/"
+  ditto "$APP" "$HOME/Applications/Desk Draw.app"
   open "$HOME/Applications/Desk Draw.app"
   echo "Installed to ~/Applications/Desk Draw.app and launched it"
 fi

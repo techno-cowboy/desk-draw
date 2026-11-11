@@ -1,12 +1,38 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
-  <channel>
-    <title>Desk Draw Updates</title>
-    <link>https://github.com/techno-cowboy/desk-draw</link>
-    <description>Signed Desk Draw releases for macOS.</description>
-  </channel>
-</rss><!-- sparkle-signatures:
-edSignature: icVMVhrcqhg29ruCqw8aSTAcUWJ/KIt3Pg/ZUtGWT87y9Zw7x8cNiTy8nzw8AqSVMrwcCDwolTPXvsXFnPmwAg==
-length: 575
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Desk Draw Updates</title>
+        <link>https://github.com/techno-cowboy/desk-draw</link>
+        <description>Signed Desk Draw releases for macOS.</description>
+        <item>
+            <title>0.3.0</title>
+            <pubDate>Wed, 11 Nov 2026 18:10:03 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[🤖 Written and posted by GPT-6.1 Sol (OpenAI, effort: high) on behalf of Nils.
+
+Desk Draw can now check for updates and install them with Sparkle.
+
+- Use **Check for Updates…** in the menu bar menu, or leave automatic checks enabled.
+- Choose whether to download and install updates automatically. Your choice is remembered.
+- Updates wait for an active drawing session to finish before restarting the app.
+- Update archives and the update feed are cryptographically signed and verified before use.
+
+Versions 0.1.0 and 0.2.0 need one manual update to this version. Subsequent updates can be installed from the app.
+
+Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not notarized; macOS may require **Open Anyway** on first launch and renewed Screen Recording permission after an update.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.3.0/Desk-Draw-0.3.0.zip" length="1380935" type="application/octet-stream" sparkle:edSignature="z27ejS9EPOTRsm8hiGMHwrgZ6YXY5YapvfckzK/BOjE+7qYs5fKXXpQ8dpBRW0TF6cbF8rqUV7VIKaUwSa5TAQ=="/>
+        </item>
+    </channel>
+</rss>
+<!-- sparkle-signatures:
+edSignature: kE2g/9+wsBy73N1QQctLcz54H6pcc/kx1/RP6PyXma0ombVaewUcsJ3mjTj1Z6sZ2Vf2aKOzqNWd/Cfdysq8CA==
+length: 2246
 -->

@@ -106,6 +106,8 @@ struct Annotation: Identifiable {
     var text: String = ""
     var textRect: CGRect = .zero
     var fontSize: CGFloat = 0
+    /// Preserve the editor's wrapping width while keeping textRect tight for hit testing and capture.
+    var textLayoutWidth: CGFloat? = nil
 
     /// Bounds including stroke width and arrow heads; used for redraw and cropping.
     var bounds: CGRect {
@@ -164,6 +166,8 @@ final class DrawingState {
 
     private enum Edit {
         case add(Annotation)
+        case update(before: Annotation, after: Annotation)
+        case remove(Annotation, index: Int)
         case clear([Annotation])
     }
 
@@ -174,10 +178,29 @@ final class DrawingState {
         onChange?()
     }
 
+    func update(_ annotation: Annotation) {
+        guard let index = annotations.firstIndex(where: { $0.id == annotation.id }) else { return }
+        let old = annotations[index]
+        annotations[index] = annotation
+        undoStack.append(.update(before: old, after: annotation))
+        redoStack.removeAll()
+        onChange?()
+    }
+
+    func remove(_ id: Annotation.ID) {
+        guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
+        undoStack.append(.remove(annotations.remove(at: index), index: index))
+        redoStack.removeAll()
+        onChange?()
+    }
+
     func undo() {
         guard let edit = undoStack.popLast() else { return }
         switch edit {
         case .add(let a): annotations.removeAll { $0.id == a.id }
+        case .update(let before, _):
+            if let index = annotations.firstIndex(where: { $0.id == before.id }) { annotations[index] = before }
+        case .remove(let a, let index): annotations.insert(a, at: min(index, annotations.count))
         case .clear(let old): annotations = old
         }
         redoStack.append(edit)
@@ -188,6 +211,9 @@ final class DrawingState {
         guard let edit = redoStack.popLast() else { return }
         switch edit {
         case .add(let a): annotations.append(a)
+        case .update(_, let after):
+            if let index = annotations.firstIndex(where: { $0.id == after.id }) { annotations[index] = after }
+        case .remove(let a, _): annotations.removeAll { $0.id == a.id }
         case .clear: annotations = []
         }
         undoStack.append(edit)

@@ -9,7 +9,7 @@ Desk Draw is a menu bar app for macOS 14 or later on Apple Silicon.
 
 ## Install
 
-Download `Desk-Draw-0.1.0.zip` from the [latest release](https://github.com/techno-cowboy/desk-draw/releases/latest),
+Download `Desk-Draw-0.2.0.zip` from the [latest release](https://github.com/techno-cowboy/desk-draw/releases/latest),
 unzip it and move `Desk Draw.app` to Applications. The app is not notarized, so macOS blocks the
 first launch. To allow it, go to System Settings → Privacy & Security and click **Open Anyway**, or
 run `xattr -dr com.apple.quarantine "/Applications/Desk Draw.app"`. You can also build it yourself
@@ -18,13 +18,20 @@ run `xattr -dr com.apple.quarantine "/Applications/Desk Draw.app"`. You can also
 ## Use
 
 1. Press **⌥⇧D** anywhere, or choose **Start Drawing** from the menu bar icon. A see-through layer
-   with a pink frame covers every display, and a toolbar appears at the top.
+   with a pink frame covers the display under your mouse, and a toolbar appears at the top.
 2. Draw with the pen, highlighter, line, arrow, rectangle, ellipse or text tool.
 3. Press **⌘S** or click **Capture** to take a screenshot. Choose what it covers first:
    - **Window**: the window you drew on, plus any marks that stick out of it
    - **Drawing**: just the area around your marks
    - **Screen**: the whole display
 4. Press **Esc** to stop. The drawing is discarded.
+
+With the **Text** tool, click to start typing. **Return** adds a new line; **⌘Return** or a click
+outside the text finishes the annotation. Double-click existing text to edit it, or drag it to
+move it. **Esc** cancels a text edit. Text edits and moves support undo and redo.
+
+The session stays on the display where you started it, including screenshots. To annotate another
+display, stop drawing, move your mouse there, and start again.
 
 ### Keys while drawing
 

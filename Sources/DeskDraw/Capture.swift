@@ -82,7 +82,7 @@ enum Capturer {
         }
         if wanted == nil { target = .screen }
 
-        let screen = largestOverlap(with: wanted ?? drawing) ?? fallbackScreen
+        let screen = session.screen ?? largestOverlap(with: wanted ?? drawing) ?? fallbackScreen
         let region = (wanted ?? screen.frame).intersection(screen.frame).integral
         guard !region.isEmpty, let displayID = screen.displayID else {
             throw CaptureError(message: "Nothing to capture on this display.")

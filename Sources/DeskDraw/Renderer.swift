@@ -77,15 +77,37 @@ enum Renderer {
         ]
     }
 
+    static func textStorage(_ text: String, color: NSColor, fontSize: CGFloat, width: CGFloat) -> NSTextStorage {
+        let storage = NSTextStorage(string: text, attributes: textAttributes(color: color, fontSize: fontSize))
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(containerSize: CGSize(width: max(1, width), height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        return storage
+    }
+
+    static func textSize(_ text: String, color: NSColor, fontSize: CGFloat, width: CGFloat) -> CGSize {
+        let storage = textStorage(text, color: color, fontSize: fontSize, width: width)
+        let layout = storage.layoutManagers[0]
+        let used = layout.usedRect(for: layout.textContainers[0])
+        return CGSize(width: max(1, ceil(used.maxX)), height: ceil(max(used.maxY, layout.extraLineFragmentRect.maxY)))
+    }
+
     private static func drawText(_ a: Annotation, in ctx: CGContext) {
-        let attrs = textAttributes(color: a.color, fontSize: a.fontSize)
-        let needsContext = NSGraphicsContext.current?.cgContext !== ctx
-        if needsContext {
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        }
-        (a.text as NSString).draw(at: a.textRect.origin, withAttributes: attrs)
-        if needsContext { NSGraphicsContext.restoreGraphicsState() }
+        let storage = textStorage(a.text, color: a.color, fontSize: a.fontSize,
+                                  width: a.textLayoutWidth ?? a.textRect.width)
+        let layout = storage.layoutManagers[0]
+        // TextKit lays out downwards from the top-left, just like the live editor.
+        ctx.translateBy(x: a.textRect.minX, y: a.textRect.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
+        let glyphs = layout.glyphRange(for: layout.textContainers[0])
+        layout.drawBackground(forGlyphRange: glyphs, at: .zero)
+        layout.drawGlyphs(forGlyphRange: glyphs, at: .zero)
     }
 
     // MARK: - Geometry helpers

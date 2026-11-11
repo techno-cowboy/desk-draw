@@ -32,14 +32,17 @@ final class OverlayWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-final class CanvasView: NSView, NSTextFieldDelegate {
+final class CanvasView: NSView, NSTextViewDelegate {
     private let screenFrame: CGRect
     private weak var session: DrawingSession?
     private var state: DrawingState? { session?.state }
 
     private var current: Annotation?
     private var dragStart: CGPoint = .zero
-    private var textField: NSTextField?
+    private var textView: NSTextView?
+    private var editingText: Annotation?
+    private var movingText: Annotation?
+    private var textTop: CGFloat = 0
 
     static let accent = NSColor(srgbRed: 0.75, green: 0.15, blue: 0.83, alpha: 1)
 
@@ -48,6 +51,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         self.session = session
         super.init(frame: CGRect(origin: .zero, size: screenFrame.size))
         wantsLayer = true
+        clipsToBounds = true
         addTrackingArea(NSTrackingArea(
             rect: .zero,
             options: [.mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
@@ -84,6 +88,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         ctx.translateBy(x: -screenFrame.minX, y: -screenFrame.minY)
         let visible = dirtyRect.offsetBy(dx: screenFrame.minX, dy: screenFrame.minY)
         for annotation in state.annotations where annotation.bounds.intersects(visible) {
+            if annotation.id == editingText?.id || annotation.id == movingText?.id { continue }
             Renderer.draw(annotation, in: ctx)
         }
         if let current { Renderer.draw(current, in: ctx) }
@@ -116,8 +121,14 @@ final class CanvasView: NSView, NSTextFieldDelegate {
 
     // MARK: Cursor
 
-    override func cursorUpdate(with event: NSEvent) { updateCursor() }
-    override func mouseMoved(with event: NSEvent) { updateCursor() }
+    override func cursorUpdate(with event: NSEvent) { mouseMoved(with: event) }
+    override func mouseMoved(with event: NSEvent) {
+        if state?.tool == .text, text(at: global(event)) != nil {
+            NSCursor.openHand.set()
+        } else {
+            updateCursor()
+        }
+    }
 
     func updateCursor() {
         (state?.tool == .text ? NSCursor.iBeam : NSCursor.crosshair).set()
@@ -128,13 +139,25 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     override func mouseDown(with event: NSEvent) {
         guard let state else { return }
         window?.makeKey()
-        if textField != nil {
+        if textView != nil {
             commitText()
             if state.tool == .text { return }
         }
         let p = global(event)
+        guard screenFrame.contains(p) else { return }
         if state.tool == .text {
-            beginText(at: p)
+            if let annotation = text(at: p) {
+                if event.clickCount >= 2 {
+                    beginText(at: p, editing: annotation)
+                } else {
+                    dragStart = p
+                    movingText = annotation
+                    current = annotation
+                    NSCursor.closedHand.set()
+                }
+            } else {
+                beginText(at: p)
+            }
             return
         }
         dragStart = p
@@ -153,6 +176,16 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         guard var annotation = current else { return }
         let old = annotation.bounds
         var p = global(event)
+        if let original = movingText {
+            guard hypot(p.x - dragStart.x, p.y - dragStart.y) >= 3 else { return }
+            var rect = original.textRect.offsetBy(dx: p.x - dragStart.x, dy: p.y - dragStart.y)
+            rect.origin.x = min(max(rect.minX, screenFrame.minX), max(screenFrame.minX, screenFrame.maxX - rect.width))
+            rect.origin.y = min(max(rect.minY, screenFrame.minY), max(screenFrame.minY, screenFrame.maxY - rect.height))
+            annotation.textRect = rect
+            current = annotation
+            setNeedsDisplay(local(old.union(annotation.bounds)))
+            return
+        }
         switch annotation.tool {
         case .pen, .highlighter:
             if let last = annotation.points.last, hypot(p.x - last.x, p.y - last.y) < 1 { return }
@@ -170,10 +203,17 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     override func mouseUp(with event: NSEvent) {
         guard let annotation = current else { return }
         current = nil
+        if let original = movingText {
+            movingText = nil
+            if annotation.textRect != original.textRect { state?.update(annotation) }
+            invalidate(annotation)
+            updateCursor()
+            return
+        }
         let isFreehand = annotation.tool == .pen || annotation.tool == .highlighter
         let size = annotation.shapeBounds
         if isFreehand || max(size.width, size.height) >= 4 {
-            state?.add(annotation) // triggers redraw of every overlay
+            state?.add(annotation) // triggers redraw of the overlay
         } else {
             invalidate(annotation)
         }
@@ -186,67 +226,112 @@ final class CanvasView: NSView, NSTextFieldDelegate {
 
     // MARK: Text
 
-    private func beginText(at p: CGPoint) {
-        guard let state else { return }
-        let fontSize = state.size.fontSize
-        let attrs = Renderer.textAttributes(color: state.color, fontSize: fontSize)
-        let lineHeight = ceil(("Xg" as NSString).size(withAttributes: attrs).height)
-        let origin = CGPoint(x: p.x - screenFrame.minX, y: p.y - screenFrame.minY - lineHeight / 2)
+    private func text(at point: CGPoint) -> Annotation? {
+        state?.annotations.last { $0.tool == .text && $0.bounds.contains(point) }
+    }
 
-        let field = NSTextField(string: "")
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        field.textColor = state.color
-        field.placeholderString = "Type, then Return"
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
-        field.delegate = self
-        field.frame = CGRect(x: origin.x - 2, y: origin.y, width: max(120, bounds.maxX - origin.x - 8), height: lineHeight + 2)
-        addSubview(field)
-        window?.makeFirstResponder(field)
-        textField = field
+    private func beginText(at p: CGPoint, editing annotation: Annotation? = nil) {
+        guard let state else { return }
+        let fontSize = annotation?.fontSize ?? state.size.fontSize
+        let color = annotation?.color ?? state.color
+        let lineHeight = ceil(NSLayoutManager().defaultLineHeight(for: NSFont.systemFont(ofSize: fontSize, weight: .semibold)))
+        let minWidth = min(120, bounds.width - 16)
+        let x = annotation.map { $0.textRect.minX - screenFrame.minX }
+            ?? min(max(8, p.x - screenFrame.minX), bounds.maxX - minWidth - 8)
+        textTop = annotation.map { $0.textRect.maxY - screenFrame.minY }
+            ?? min(bounds.maxY - 8, max(lineHeight + 8, p.y - screenFrame.minY + lineHeight / 2))
+        let width = annotation?.textLayoutWidth ?? max(minWidth, bounds.maxX - x - 8)
+
+        let view = AnnotationTextView(frame: CGRect(x: x, y: textTop - lineHeight, width: width, height: lineHeight))
+        view.drawsBackground = false
+        view.isRichText = false
+        view.importsGraphics = false
+        view.allowsUndo = true
+        view.isAutomaticQuoteSubstitutionEnabled = false
+        view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false
+        view.textContainerInset = .zero
+        view.textContainer?.lineFragmentPadding = 0
+        view.textContainer?.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
+        view.textContainer?.widthTracksTextView = true
+        view.textContainer?.heightTracksTextView = false
+        view.font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        view.textColor = color
+        view.insertionPointColor = color
+        view.typingAttributes = Renderer.textAttributes(color: color, fontSize: fontSize)
+        view.string = annotation?.text ?? ""
+        if let storage = view.textStorage, storage.length > 0 {
+            storage.setAttributes(view.typingAttributes, range: NSRange(location: 0, length: storage.length))
+        }
+        view.delegate = self
+        view.onCommit = { [weak self] in self?.commitText() }
+        view.onCapture = { [weak self] in self?.session?.capture() }
+        view.toolTip = "Return: new line · ⌘Return or click outside: finish · Esc: cancel"
+        textView = view
+        editingText = annotation
+        addSubview(view)
+        resizeTextEditor()
+        window?.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: view.string.utf16.count, length: 0))
+        needsDisplay = true
     }
 
     func commitText() {
-        guard let field = textField, let state else { return }
-        textField = nil
-        let text = field.stringValue.trimmingCharacters(in: .whitespaces)
-        let color = field.textColor ?? state.color
-        let fontSize = field.font?.pointSize ?? state.size.fontSize
-        let frame = field.frame
-        field.delegate = nil
-        field.removeFromSuperview()
+        guard let view = textView, let state else { return }
+        let original = editingText
+        let text = view.string
+        let color = view.textColor ?? state.color
+        let fontSize = view.font?.pointSize ?? state.size.fontSize
+        let width = view.textContainer?.containerSize.width ?? view.frame.width
+        let size = Renderer.textSize(text, color: color, fontSize: fontSize, width: width)
+        let origin = CGPoint(x: view.frame.minX + screenFrame.minX, y: textTop - size.height + screenFrame.minY)
+        textView = nil
+        editingText = nil
+        view.delegate = nil
+        view.removeFromSuperview()
         window?.makeFirstResponder(self)
-        guard !text.isEmpty else { return }
-
-        let attrs = Renderer.textAttributes(color: color, fontSize: fontSize)
-        let size = (text as NSString).size(withAttributes: attrs)
-        let origin = CGPoint(x: frame.minX + 2 + screenFrame.minX, y: frame.maxY - size.height - 1 + screenFrame.minY)
-        state.add(Annotation(
+        needsDisplay = true
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            if let original { state.remove(original.id) }
+            return
+        }
+        // Opening and closing an existing label should not create an undo step or move it.
+        if let original, original.text == text { return }
+        var annotation = original ?? Annotation(
             tool: .text,
             color: color,
-            colorName: Palette.colors.first { $0.color == color }?.name ?? state.colorName,
+            colorName: state.colorName,
             lineWidth: 0,
-            filled: false,
-            text: text,
-            textRect: CGRect(origin: origin, size: size),
-            fontSize: fontSize
-        ))
+            filled: false
+        )
+        annotation.text = text
+        annotation.textRect = CGRect(origin: origin, size: size)
+        annotation.fontSize = fontSize
+        annotation.textLayoutWidth = width
+        if original != nil { state.update(annotation) } else { state.add(annotation) }
     }
 
     private func cancelText() {
-        textField?.delegate = nil
-        textField?.removeFromSuperview()
-        textField = nil
+        textView?.delegate = nil
+        textView?.removeFromSuperview()
+        textView = nil
+        editingText = nil
         window?.makeFirstResponder(self)
+        needsDisplay = true
     }
 
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+    private func resizeTextEditor() {
+        guard let view = textView, let layout = view.layoutManager, let container = view.textContainer else { return }
+        layout.ensureLayout(for: container)
+        let height = max(ceil(layout.usedRect(for: container).maxY), ceil(layout.extraLineFragmentRect.maxY),
+                         ceil(layout.defaultLineHeight(for: view.font ?? .systemFont(ofSize: 28))))
+        view.frame = CGRect(x: view.frame.minX, y: textTop - height, width: view.frame.width, height: height)
+    }
+
+    func textDidChange(_ notification: Notification) { resizeTextEditor() }
+
+    func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
-        case #selector(NSResponder.insertNewline(_:)):
-            commitText(); return true
         case #selector(NSResponder.cancelOperation(_:)):
             cancelText(); return true
         default:
@@ -260,7 +345,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     @objc func redo(_ sender: Any?) { state?.redo() }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard textField == nil, window?.isKeyWindow == true, let session else {
+        guard window?.isKeyWindow == true, let session else {
             return super.performKeyEquivalent(with: event)
         }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -270,7 +355,12 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         case ("s", _):
             session.capture()
             return true
+        case (_, UInt16(kVK_Return)) where textView != nil,
+             (_, UInt16(kVK_ANSI_KeypadEnter)) where textView != nil:
+            commitText()
+            return true
         case (_, UInt16(kVK_Delete)):
+            guard textView == nil else { return super.performKeyEquivalent(with: event) }
             session.state.clear()
             return true
         default:
@@ -311,5 +401,24 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         } else if key == "s" {
             state.captureTarget = .screen
         }
+    }
+}
+
+private final class AnnotationTextView: NSTextView {
+    var onCommit: (() -> Void)?
+    var onCapture: (() -> Void)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) {
+            if event.keyCode == UInt16(kVK_Return) || event.keyCode == UInt16(kVK_ANSI_KeypadEnter) {
+                onCommit?()
+                return true
+            }
+            if event.charactersIgnoringModifiers?.lowercased() == "s" {
+                onCapture?()
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }

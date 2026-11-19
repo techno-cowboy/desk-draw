@@ -8,6 +8,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/techno-cowboy/desk-draw</link>
         <description>Signed Desk Draw releases for macOS.</description>
         <item>
+            <title>0.4.0</title>
+            <pubDate>Thu, 19 Nov 2026 14:51:05 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[🤖 Claude Opus 5.5 responding on behalf of Nils 🤘🏻
+
+Everything you draw can now be changed after you draw it.
+
+- Pick the new **Select** tool (**V**) and click a mark to select it.
+- Drag a mark to move it, or nudge it with the arrow keys (Shift moves 10 points).
+- Drag a handle to resize it. Shift keeps the proportions, or snaps lines and arrows to 45° steps.
+  Dragging a corner of text scales its font.
+- Pick a color, size or fill to restyle the selected mark. Selecting a mark shows its current style
+  in the toolbar.
+- Press **⌫** to delete the selected mark, or **Esc** to deselect it.
+- Picking a color or size while typing text now applies it to that text.
+
+Every change can be undone.
+
+Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not notarized; macOS may require **Open Anyway** on first launch and renewed Screen Recording permission after an update.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.4.0/Desk-Draw-0.4.0.zip" length="1402488" type="application/octet-stream" sparkle:edSignature="qgwYOsGnB5B5rogjjtYRhJOH1PhcrHT5QZ4CNIhQaAILtuxiZbdsckajXh41VVAAOKppbfAl0gv4WpwzWGZFDw=="/>
+        </item>
+        <item>
             <title>0.3.0</title>
             <pubDate>Wed, 11 Nov 2026 18:10:03 +0100</pubDate>
             <link>https://github.com/techno-cowboy/desk-draw</link>
@@ -33,6 +60,6 @@ Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: kE2g/9+wsBy73N1QQctLcz54H6pcc/kx1/RP6PyXma0ombVaewUcsJ3mjTj1Z6sZ2Vf2aKOzqNWd/Cfdysq8CA==
-length: 2246
+edSignature: W/hKU+ssd8FWhR2Lhpz+GulnLaDhX3AFxB89JAiYXGRbP7bSwuQ+l9X5kZqJhJh2aCbHxCUhHwzY+Hh6VD6qCQ==
+length: 3988
 -->

@@ -76,7 +76,7 @@ struct ToolbarView: View {
             separator
 
             ForEach(Palette.colors.indices, id: \.self) { i in
-                Button { state.colorIndex = i } label: {
+                Button { state.setColor(i) } label: {
                     Circle()
                         .fill(Color(nsColor: Palette.colors[i].color))
                         .frame(width: 16, height: 16)
@@ -85,13 +85,13 @@ struct ToolbarView: View {
                         .overlay(Circle().strokeBorder(state.colorIndex == i ? Color.white : .clear, lineWidth: 2))
                 }
                 .buttonStyle(.plain)
-                .help("\(Palette.colors[i].name) (\(i + 1))")
+                .help("\(Palette.colors[i].name) (\(i + 1)); recolors the selected mark")
             }
 
             separator
 
             ForEach(StrokeSize.allCases) { size in
-                Button { state.size = size } label: {
+                Button { state.setSize(size) } label: {
                     Circle()
                         .fill(state.size == size ? Color.white : Color.secondary)
                         .frame(width: 4 + CGFloat(size.rawValue) * 4, height: 4 + CGFloat(size.rawValue) * 4)
@@ -99,11 +99,11 @@ struct ToolbarView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("\(size.title) ([ and ] change size)")
+                .help("\(size.title) ([ and ] change size; resizes the selected mark's line or text)")
             }
             IconButton(symbol: state.fillShapes ? "square.fill" : "square", selected: state.fillShapes,
                        help: "Fill rectangles and ellipses (F)") {
-                state.fillShapes.toggle()
+                state.toggleFill()
             }
 
             separator

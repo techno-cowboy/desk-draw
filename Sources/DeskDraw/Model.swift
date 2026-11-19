@@ -2,12 +2,13 @@ import AppKit
 import Observation
 
 enum Tool: String, CaseIterable, Identifiable {
-    case pen, highlighter, line, arrow, rectangle, ellipse, text
+    case select, pen, highlighter, line, arrow, rectangle, ellipse, text
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .select: "Select"
         case .pen: "Pen"
         case .highlighter: "Highlighter"
         case .line: "Line"
@@ -20,6 +21,7 @@ enum Tool: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .select: "cursorarrow"
         case .pen: "scribble.variable"
         case .highlighter: "highlighter"
         case .line: "line.diagonal"
@@ -33,6 +35,7 @@ enum Tool: String, CaseIterable, Identifiable {
     /// Single-key shortcut while drawing.
     var key: String {
         switch self {
+        case .select: "v"
         case .pen: "p"
         case .highlighter: "h"
         case .line: "l"
@@ -53,6 +56,15 @@ enum StrokeSize: Int, CaseIterable, Identifiable {
     var lineWidth: CGFloat { [3, 6, 12][rawValue] }
     var fontSize: CGFloat { [18, 28, 44][rawValue] }
     var title: String { ["Thin", "Medium", "Thick"][rawValue] }
+
+    /// The preset an annotation uses, if it still matches one exactly.
+    init?(matching annotation: Annotation) {
+        let match = annotation.tool == .text
+            ? Self.allCases.first { $0.fontSize == annotation.fontSize }
+            : Self.allCases.first { $0.lineWidth == annotation.lineWidth }
+        guard let match else { return nil }
+        self = match
+    }
 }
 
 enum CaptureTarget: String, CaseIterable, Identifiable {
@@ -91,11 +103,15 @@ enum Palette {
         PaletteColor(name: "White", color: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)),
         PaletteColor(name: "Black", color: NSColor(srgbRed: 0.08, green: 0.08, blue: 0.08, alpha: 1)),
     ]
+
+    static func index(named name: String) -> Int? {
+        colors.firstIndex { $0.name == name }
+    }
 }
 
 /// One mark on the screen. All geometry is in global AppKit screen coordinates
 /// (origin bottom-left of the primary display), so bounds work across displays.
-struct Annotation: Identifiable {
+struct Annotation: Identifiable, Equatable {
     let id = UUID()
     var tool: Tool
     var color: NSColor
@@ -135,7 +151,9 @@ struct Annotation: Identifiable {
 @MainActor
 @Observable
 final class DrawingState {
-    var tool: Tool = .pen
+    var tool: Tool = .pen {
+        didSet { if tool != .select { selectedID = nil } }
+    }
     var colorIndex = 0
     var size: StrokeSize = .medium
     var fillShapes = false
@@ -144,6 +162,14 @@ final class DrawingState {
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     private(set) var annotations: [Annotation] = []
+    /// The mark the Select tool is working on.
+    private(set) var selectedID: Annotation.ID? {
+        didSet { if selectedID != oldValue { onChange?() } }
+    }
+    var selection: Annotation? {
+        guard let selectedID else { return nil }
+        return annotations.first { $0.id == selectedID }
+    }
     private var undoStack: [Edit] = []
     private var redoStack: [Edit] = []
 
@@ -163,6 +189,57 @@ final class DrawingState {
     }
 
     @ObservationIgnored var onChange: (() -> Void)?
+    /// Color or size was picked, so a text field being typed in can follow.
+    @ObservationIgnored var onStyleChange: ((StyleChange) -> Void)?
+
+    enum StyleChange { case color, size }
+
+    // MARK: Selection and style
+
+    /// Selects a mark and shows its style in the toolbar, so the next change starts from it.
+    func select(_ id: Annotation.ID?) {
+        selectedID = id
+        guard let a = selection else { return }
+        if let i = Palette.index(named: a.colorName) { colorIndex = i }
+        if let match = StrokeSize(matching: a) { size = match }
+        if a.tool.isShape { fillShapes = a.filled }
+    }
+
+    /// Picks a color for new marks and recolors the selected one.
+    func setColor(_ index: Int) {
+        guard Palette.colors.indices.contains(index) else { return }
+        colorIndex = index
+        restyleSelection { $0.withColor(Palette.colors[index]) }
+        onStyleChange?(.color)
+    }
+
+    /// Picks a size for new marks and resizes the selected one's stroke or text.
+    func setSize(_ size: StrokeSize) {
+        self.size = size
+        restyleSelection { $0.withSize(size) }
+        onStyleChange?(.size)
+    }
+
+    func cycleSize(by delta: Int) {
+        let next = min(max(size.rawValue + delta, 0), StrokeSize.allCases.count - 1)
+        setSize(StrokeSize(rawValue: next) ?? size)
+    }
+
+    /// Toggles fill for new shapes, and for the selected shape.
+    func toggleFill() {
+        if let a = selection, a.tool.isShape {
+            fillShapes = !a.filled
+            restyleSelection { var a = $0; a.filled = fillShapes; return a }
+        } else {
+            fillShapes.toggle()
+        }
+    }
+
+    private func restyleSelection(_ change: (Annotation) -> Annotation) {
+        guard let a = selection else { return }
+        let changed = change(a)
+        if changed != a { update(changed) }
+    }
 
     private enum Edit {
         case add(Annotation)
@@ -191,6 +268,7 @@ final class DrawingState {
         guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
         undoStack.append(.remove(annotations.remove(at: index), index: index))
         redoStack.removeAll()
+        dropStaleSelection()
         onChange?()
     }
 
@@ -204,6 +282,7 @@ final class DrawingState {
         case .clear(let old): annotations = old
         }
         redoStack.append(edit)
+        dropStaleSelection()
         onChange?()
     }
 
@@ -217,6 +296,7 @@ final class DrawingState {
         case .clear: annotations = []
         }
         undoStack.append(edit)
+        dropStaleSelection()
         onChange?()
     }
 
@@ -225,12 +305,18 @@ final class DrawingState {
         undoStack.append(.clear(annotations))
         redoStack.removeAll()
         annotations = []
+        dropStaleSelection()
         onChange?()
+    }
+
+    private func dropStaleSelection() {
+        if selectedID != nil, selection == nil { selectedID = nil }
     }
 
     /// Drops everything. Drawings are never persisted.
     func reset() {
         annotations = []
+        selectedID = nil
         undoStack = []
         redoStack = []
         toast = nil
@@ -242,10 +328,5 @@ final class DrawingState {
         let rects = annotations.map(\.bounds).filter { !$0.isNull }
         guard let first = rects.first else { return nil }
         return rects.dropFirst().reduce(first) { $0.union($1) }
-    }
-
-    func cycleSize(by delta: Int) {
-        let next = min(max(size.rawValue + delta, 0), StrokeSize.allCases.count - 1)
-        size = StrokeSize(rawValue: next) ?? size
     }
 }

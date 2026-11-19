@@ -59,6 +59,9 @@ enum Renderer {
 
         case .text:
             drawText(a, in: ctx)
+
+        case .select:
+            break
         }
     }
 

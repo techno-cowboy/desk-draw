@@ -26,7 +26,20 @@ run `xattr -dr com.apple.quarantine "/Applications/Desk Draw.app"`. You can also
    - **Screen**: the whole display
 4. Press **Esc** to stop. The drawing is discarded.
 
-With the **Text** tool, click to start typing. **Return** adds a new line; **⌘Return** or a click
+To change something you already drew, pick the **Select** tool (**V**) and click it. Then:
+
+- Drag it to move it, or nudge it with the arrow keys (Shift for 10 points at a time).
+- Drag a handle to resize it. Corners keep the opposite corner in place, and Shift keeps the
+  proportions. Lines and arrows have a handle at each end; Shift snaps them to 45° steps. Dragging
+  a corner of text scales its font.
+- Pick a color, size or fill in the toolbar, or press its key, to restyle it.
+- Press **⌫** to delete it, or **Esc** to deselect it.
+
+Every change can be undone. Clicking the stroke of a mark selects it before the inside of an
+outlined box around it, so marks inside boxes stay easy to reach.
+
+With the **Text** tool, click to start typing. Picking a color or size while typing applies it to
+the text. **Return** adds a new line; **⌘Return** or a click
 outside the text finishes the annotation. Double-click existing text to edit it, or drag it to
 move it. **Esc** cancels a text edit. Text edits and moves support undo and redo.
 
@@ -37,16 +50,17 @@ display, stop drawing, move your mouse there, and start again.
 
 | Key | Action |
 | --- | --- |
-| P H L A R O T | Pen, Highlighter, Line, Arrow, Rectangle, Ellipse, Text |
+| V P H L A R O T | Select, Pen, Highlighter, Line, Arrow, Rectangle, Ellipse, Text |
 | Shift + drag | Straight angles, squares, circles |
-| 1–8 | Colors |
-| `[` `]` or `-` `+` | Thinner / thicker |
-| F | Fill rectangles and ellipses |
+| 1–8 | Colors (also recolors the selected mark) |
+| `[` `]` or `-` `+` | Thinner / thicker (also the selected mark) |
+| F | Fill rectangles and ellipses (also the selected one) |
+| Arrow keys | Nudge the selected mark (Shift: 10 points) |
 | ⌘Z / ⇧⌘Z | Undo / redo |
-| ⌫ / ⌘⌫ | Remove last mark / clear all |
+| ⌫ / ⌘⌫ | Delete the selected mark, or the last one / clear all |
 | W / D / S | Capture Window / Drawing / Screen |
 | ⌘S | Save screenshot |
-| Esc | Stop drawing |
+| Esc | Deselect, or stop drawing |
 
 ## Updates
 

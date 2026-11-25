@@ -117,17 +117,28 @@ struct ToolbarView: View {
 
             separator
 
-            Picker("Capture", selection: $state.captureTarget) {
-                ForEach(CaptureTarget.allCases) { Text($0.title).tag($0) }
+            IconButton(symbol: "rectangle.inset.filled", selected: state.whiteboard,
+                       help: state.whiteboard ? "Back to drawing on the screen (B)" : "Whiteboard: cover the screen with a white board (B)") {
+                state.toggleWhiteboard()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
-            .help("What the screenshot covers (W / D / S)")
+
+            separator
+
+            // The whiteboard is always saved whole, so there is nothing to choose.
+            if !state.whiteboard {
+                Picker("Capture", selection: $state.captureTarget) {
+                    ForEach(CaptureTarget.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                .help("What the screenshot covers (W / D / S)")
+            }
 
             Button { session.capture() } label: {
-                Label("Capture", systemImage: "camera.fill")
+                Label(state.whiteboard ? "Save" : "Capture",
+                      systemImage: state.whiteboard ? "square.and.arrow.down.fill" : "camera.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 10)
                     .frame(height: 26)
@@ -135,9 +146,13 @@ struct ToolbarView: View {
                     .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
-            .help("Save a screenshot with context and copy it (⌘S)")
+            .help(state.whiteboard ? "Save the whiteboard as an image and copy it (⌘S)"
+                                   : "Save a screenshot with context and copy it (⌘S)")
 
-            IconButton(symbol: "xmark", help: "Stop drawing and discard (Esc)") { session.end() }
+            IconButton(symbol: "xmark", help: state.whiteboard ? "Close the whiteboard; asks before discarding it (Esc)"
+                                                               : "Stop drawing and discard (Esc)") {
+                session.requestEnd()
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)

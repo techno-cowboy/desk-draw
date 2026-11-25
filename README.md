@@ -43,6 +43,19 @@ the text. **Return** adds a new line; **⌘Return** or a click
 outside the text finishes the annotation. Double-click existing text to edit it, or drag it to
 move it. **Esc** cancels a text edit. Text edits and moves support undo and redo.
 
+### Whiteboard
+
+Click the whiteboard button in the toolbar, or press **B**, to cover the display with a white board.
+All the tools work on it, and white ink switches to black so it stays visible. Press **⌘S** or click
+**Save** to save the whole board as an image. It goes to the same folder as screenshots and is copied
+to the clipboard, and it needs no Screen Recording permission. Press **B** again to go back to
+drawing on the screen; your marks stay.
+
+A whiteboard with unsaved marks is not discarded by accident. **Esc**, the close button, **⌥⇧D**,
+**Stop Drawing** and **Quit** first ask whether to save it, discard it or keep drawing. If the
+display layout changes while you draw, which always stops drawing, an unsaved whiteboard is saved
+first.
+
 The session stays on the display where you started it, including screenshots. To annotate another
 display, stop drawing, move your mouse there, and start again.
 
@@ -55,12 +68,13 @@ display, stop drawing, move your mouse there, and start again.
 | 1–8 | Colors (also recolors the selected mark) |
 | `[` `]` or `-` `+` | Thinner / thicker (also the selected mark) |
 | F | Fill rectangles and ellipses (also the selected one) |
+| B | Whiteboard on / off |
 | Arrow keys | Nudge the selected mark (Shift: 10 points) |
 | ⌘Z / ⇧⌘Z | Undo / redo |
 | ⌫ / ⌘⌫ | Delete the selected mark, or the last one / clear all |
 | W / D / S | Capture Window / Drawing / Screen |
-| ⌘S | Save screenshot |
-| Esc | Deselect, or stop drawing |
+| ⌘S | Save screenshot, or the whiteboard |
+| Esc | Deselect, or stop drawing (asks first on an unsaved whiteboard) |
 
 ## Updates
 

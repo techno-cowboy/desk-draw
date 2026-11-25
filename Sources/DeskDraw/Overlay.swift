@@ -6,6 +6,8 @@ enum Levels {
     /// Above the menu bar, Dock and other apps' floating panels.
     static let overlay = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 1)
     static let toolbar = NSWindow.Level.screenSaver
+    /// Questions asked while drawing, above everything else.
+    static let alert = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
 }
 
 /// A transparent, borderless window covering one display while drawing.
@@ -85,8 +87,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext, let state else { return }
 
-        // A barely-there tint so the window always hit-tests as opaque.
-        NSColor(white: 0, alpha: 0.008).setFill()
+        if state.whiteboard {
+            Whiteboard.background.setFill()
+        } else {
+            // A barely-there tint so the window always hit-tests as opaque.
+            NSColor(white: 0, alpha: 0.008).setFill()
+        }
         dirtyRect.fill()
 
         ctx.saveGState()
@@ -555,7 +561,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         guard let session else { return }
         let state = session.state
         if event.keyCode == UInt16(kVK_Escape) {
-            if state.selection != nil { state.select(nil) } else { session.end() }
+            if state.selection != nil { state.select(nil) } else { session.requestEnd() }
             return
         }
         if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete) {
@@ -587,6 +593,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
             state.cycleSize(by: 1)
         } else if key == "f" {
             state.toggleFill()
+        } else if key == "b" {
+            state.toggleWhiteboard()
         } else if key == "w" {
             state.captureTarget = .window
         } else if key == "d" {

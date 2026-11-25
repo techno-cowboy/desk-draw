@@ -123,45 +123,86 @@ enum Capturer {
         }
 
         // 5. Save PNG (+ JSON) and copy.
-        let folder = Settings.screenshotFolder
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = uniqueURL(in: folder, base: fileBase(date: now, app: appName, title: window?.title ?? tab?.title))
-
         let pixelScale = CGFloat(shot.width) / screen.frame.width
-        let marks: [CaptureRecord.Mark] = annotations.compactMap { a in
-            let r = a.shapeBounds.intersection(region)
-            guard !r.isNull else { return nil }
-            return CaptureRecord.Mark(
-                kind: a.tool.rawValue,
-                color: a.colorName.lowercased(),
-                rect: .init(
-                    x: Double(((r.minX - region.minX) * pixelScale).rounded()),
-                    y: Double(((region.maxY - r.maxY) * pixelScale).rounded()),
-                    width: Double((r.width * pixelScale).rounded()),
-                    height: Double((r.height * pixelScale).rounded())
-                ),
-                text: a.tool == .text ? a.text : nil
+        let base = fileBase(date: now, app: appName, title: window?.title ?? tab?.title)
+        return try save(image, base: base, scale: pixelScale, title: caption?.title ?? appName) { file in
+            CaptureRecord(
+                capturedAt: ISO8601DateFormatter().string(from: now),
+                target: target.rawValue,
+                image: file,
+                imageWidth: image.width,
+                imageHeight: image.height,
+                captionHeight: caption == nil ? 0 : Int((Caption.height * pixelScale).rounded()),
+                scale: Double(pixelScale),
+                app: app.map { .init(name: $0.localizedName, bundleID: $0.bundleIdentifier) }
+                    ?? window.map { .init(name: $0.ownerName, bundleID: nil) },
+                window: window.map { .init(title: $0.title, frame: cgRect(Geometry.flip($0.frame))) },
+                browserTab: tab.map { .init(url: $0.url, title: $0.title) },
+                frontmostApp: context.frontApp.map { .init(name: $0.localizedName, bundleID: $0.bundleIdentifier) },
+                display: screen.localizedName,
+                region: cgRect(Geometry.flip(region)),
+                annotations: marks(annotations, in: region, scale: pixelScale)
             )
         }
-        let record = CaptureRecord(
-            capturedAt: ISO8601DateFormatter().string(from: now),
-            target: target.rawValue,
-            image: url.lastPathComponent,
-            imageWidth: image.width,
-            imageHeight: image.height,
-            captionHeight: caption == nil ? 0 : Int((Caption.height * pixelScale).rounded()),
-            scale: Double(pixelScale),
-            app: app.map { .init(name: $0.localizedName, bundleID: $0.bundleIdentifier) }
-                ?? window.map { .init(name: $0.ownerName, bundleID: nil) },
-            window: window.map { .init(title: $0.title, frame: cgRect(Geometry.flip($0.frame))) },
-            browserTab: tab.map { .init(url: $0.url, title: $0.title) },
-            frontmostApp: context.frontApp.map { .init(name: $0.localizedName, bundleID: $0.bundleIdentifier) },
-            display: screen.localizedName,
-            region: cgRect(Geometry.flip(region)),
-            annotations: marks
-        )
+    }
 
-        guard let png = pngData(image, scale: pixelScale, title: caption?.title ?? appName, description: summary(record)) else {
+    // MARK: - Whiteboard
+
+    /// Saves the whiteboard: its marks on a white board the size of the display it covers.
+    /// It needs no screenshot, so it also works without Screen Recording permission.
+    static func saveWhiteboard(annotations: [Annotation], frame: CGRect, scale: CGFloat, display: String) throws -> URL {
+        let now = Date()
+        let caption = Settings.caption ? Caption(
+            icon: NSApp.applicationIconImage,
+            title: "Whiteboard",
+            detail: now.formatted(date: .abbreviated, time: .standard)
+        ) : nil
+        guard let image = renderWhiteboard(annotations: annotations, frame: frame, scale: scale, caption: caption) else {
+            throw CaptureError(message: "Could not draw the whiteboard.")
+        }
+        let base = fileBase(date: now, app: "Whiteboard", title: nil)
+        return try save(image, base: base, scale: scale, title: "Desk Draw Whiteboard") { file in
+            CaptureRecord(
+                capturedAt: ISO8601DateFormatter().string(from: now),
+                target: "whiteboard",
+                image: file,
+                imageWidth: image.width,
+                imageHeight: image.height,
+                captionHeight: caption == nil ? 0 : Int((Caption.height * scale).rounded()),
+                scale: Double(scale),
+                display: display,
+                region: cgRect(Geometry.flip(frame)),
+                annotations: marks(annotations, in: frame, scale: scale)
+            )
+        }
+    }
+
+    /// The whole board with its marks, at the display's pixel scale.
+    static func renderWhiteboard(annotations: [Annotation], frame: CGRect, scale: CGFloat, caption: Caption?) -> CGImage? {
+        let width = Int((frame.width * scale).rounded()), height = Int((frame.height * scale).rounded())
+        guard width > 0, height > 0, let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.setFillColor(Whiteboard.background.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let board = ctx.makeImage() else { return nil }
+        return compose(board, screenFrame: frame, region: frame, annotations: annotations, caption: caption)
+    }
+
+    // MARK: - Saving
+
+    /// Writes the PNG (and the JSON next to it), copies it, and returns where it went.
+    /// `record` gets the image's file name.
+    private static func save(
+        _ image: CGImage, base: String, scale: CGFloat, title: String, record makeRecord: (String) -> CaptureRecord
+    ) throws -> URL {
+        let folder = Settings.screenshotFolder
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = uniqueURL(in: folder, base: base)
+        let record = makeRecord(url.lastPathComponent)
+
+        guard let png = pngData(image, scale: scale, title: title, description: summary(record)) else {
             throw CaptureError(message: "Could not encode the PNG.")
         }
         try png.write(to: url)
@@ -182,6 +223,25 @@ enum Capturer {
             NSPasteboard.general.writeObjects([item])
         }
         return url
+    }
+
+    /// Marks inside `region`, in image pixels with a top-left origin.
+    private static func marks(_ annotations: [Annotation], in region: CGRect, scale: CGFloat) -> [CaptureRecord.Mark] {
+        annotations.compactMap { a in
+            let r = a.shapeBounds.intersection(region)
+            guard !r.isNull else { return nil }
+            return CaptureRecord.Mark(
+                kind: a.tool.rawValue,
+                color: a.colorName.lowercased(),
+                rect: .init(
+                    x: Double(((r.minX - region.minX) * scale).rounded()),
+                    y: Double(((region.maxY - r.maxY) * scale).rounded()),
+                    width: Double((r.width * scale).rounded()),
+                    height: Double((r.height * scale).rounded())
+                ),
+                text: a.tool == .text ? a.text : nil
+            )
+        }
     }
 
     // MARK: - Composition

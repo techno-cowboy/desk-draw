@@ -37,8 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func toggleDrawing() {
-        if session != nil {
-            session?.end()
+        if let session {
+            session.requestEnd()
             return
         }
         let session = DrawingSession(state: state)
@@ -48,6 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         self.session = session
         session.start()
+    }
+
+    /// Quitting would throw away an unsaved whiteboard too, so ask first.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let session, session.hasUnsavedWhiteboard else { return .terminateNow }
+        // Answer right away: while waiting on `.terminateLater`, queued main-thread work never runs.
+        return session.requestEnd() ? .terminateNow : .terminateCancel
     }
 
     // MARK: Status menu
@@ -134,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.informativeText = """
         \(Self.hotKeyLabel)   Start / stop drawing (anywhere)
         Esc   Stop drawing (the drawing is discarded)
+        B   Whiteboard on / off (asks before discarding it)
 
         P Pen · H Highlighter · L Line · A Arrow
         R Rectangle · O Ellipse · T Text

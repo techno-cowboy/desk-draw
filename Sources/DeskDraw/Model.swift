@@ -109,6 +109,11 @@ enum Palette {
     }
 }
 
+enum Whiteboard {
+    /// The board's color, on screen and in saved images.
+    static let background = NSColor.white
+}
+
 /// One mark on the screen. All geometry is in global AppKit screen coordinates
 /// (origin bottom-left of the primary display), so bounds work across displays.
 struct Annotation: Identifiable, Equatable {
@@ -158,6 +163,10 @@ final class DrawingState {
     var size: StrokeSize = .medium
     var fillShapes = false
     var captureTarget: CaptureTarget = .window
+    /// The display is covered by an opaque white board instead of see-through.
+    var whiteboard = false {
+        didSet { if whiteboard != oldValue { onChange?() } }
+    }
     var toast: String?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
@@ -170,6 +179,8 @@ final class DrawingState {
         guard let selectedID else { return nil }
         return annotations.first { $0.id == selectedID }
     }
+    /// Counts changes to the marks, so a session can tell whether they changed since a save.
+    @ObservationIgnored private(set) var revision = 0
     private var undoStack: [Edit] = []
     private var redoStack: [Edit] = []
 
@@ -235,6 +246,14 @@ final class DrawingState {
         }
     }
 
+    /// Turns the whiteboard on or off. White ink would vanish on the board, so it switches to black.
+    func toggleWhiteboard() {
+        whiteboard.toggle()
+        if whiteboard, colorName == "White", let black = Palette.index(named: "Black") {
+            colorIndex = black
+        }
+    }
+
     private func restyleSelection(_ change: (Annotation) -> Annotation) {
         guard let a = selection else { return }
         let changed = change(a)
@@ -252,6 +271,7 @@ final class DrawingState {
         annotations.append(annotation)
         undoStack.append(.add(annotation))
         redoStack.removeAll()
+        revision += 1
         onChange?()
     }
 
@@ -261,6 +281,7 @@ final class DrawingState {
         annotations[index] = annotation
         undoStack.append(.update(before: old, after: annotation))
         redoStack.removeAll()
+        revision += 1
         onChange?()
     }
 
@@ -268,6 +289,7 @@ final class DrawingState {
         guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
         undoStack.append(.remove(annotations.remove(at: index), index: index))
         redoStack.removeAll()
+        revision += 1
         dropStaleSelection()
         onChange?()
     }
@@ -282,6 +304,7 @@ final class DrawingState {
         case .clear(let old): annotations = old
         }
         redoStack.append(edit)
+        revision += 1
         dropStaleSelection()
         onChange?()
     }
@@ -296,6 +319,7 @@ final class DrawingState {
         case .clear: annotations = []
         }
         undoStack.append(edit)
+        revision += 1
         dropStaleSelection()
         onChange?()
     }
@@ -305,6 +329,7 @@ final class DrawingState {
         undoStack.append(.clear(annotations))
         redoStack.removeAll()
         annotations = []
+        revision += 1
         dropStaleSelection()
         onChange?()
     }
@@ -320,6 +345,8 @@ final class DrawingState {
         undoStack = []
         redoStack = []
         toast = nil
+        whiteboard = false
+        revision += 1
         onChange?()
     }
 

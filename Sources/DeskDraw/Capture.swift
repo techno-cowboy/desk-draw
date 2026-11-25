@@ -239,7 +239,7 @@ enum Capturer {
                     width: Double((r.width * scale).rounded()),
                     height: Double((r.height * scale).rounded())
                 ),
-                text: a.tool == .text ? a.text : nil
+                text: a.tool == .text ? a.text : (a.tool == .number ? "\(a.number)" : nil)
             )
         }
     }

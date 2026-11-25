@@ -19,8 +19,8 @@ extension Annotation {
     var handles: [SelectionHandle] {
         if isSegment { return [.endpoint(0), .endpoint(1)] }
         let corners: [SelectionHandle] = [.box(x: 0, y: 0), .box(x: 2, y: 0), .box(x: 0, y: 2), .box(x: 2, y: 2)]
-        // Text scales as a whole, so it only gets corners.
-        if tool == .text { return corners }
+        // Text and number dots scale as a whole, so they only get corners.
+        if tool == .text || tool == .number { return corners }
         return corners + [.box(x: 1, y: 0), .box(x: 1, y: 2), .box(x: 0, y: 1), .box(x: 2, y: 1)]
     }
 
@@ -44,6 +44,9 @@ extension Annotation {
             return false
         case .text:
             return textRect.insetBy(dx: -6, dy: -6).contains(p)
+        case .number:
+            guard let c = points.first else { return false }
+            return hypot(p.x - c.x, p.y - c.y) <= diameter / 2 + 3
         case .pen, .highlighter:
             guard let first = points.first else { return false }
             if points.count == 1 { return hypot(p.x - first.x, p.y - first.y) <= t }
@@ -130,11 +133,12 @@ extension Annotation {
             var width = hx == 1 ? old.width : max(minSide, hx == 0 ? anchor.x - p.x : p.x - anchor.x)
             var height = hy == 1 ? old.height : max(minSide, hy == 0 ? anchor.y - p.y : p.y - anchor.y)
             let isCorner = hx != 1 && hy != 1
-            if tool == .text || (proportional && isCorner) {
+            if tool == .text || tool == .number || (proportional && isCorner) {
                 let sx = old.width > 0.5 ? width / old.width : 0
                 let sy = old.height > 0.5 ? height / old.height : 0
                 let scale = max(sx, sy, 0.05)
                 if tool == .text { return a.scaledText(by: scale, anchoredAt: anchor, handleX: hx, handleY: hy) }
+                if tool == .number { return a.scaledMarker(by: scale, anchoredAt: anchor, handleX: hx, handleY: hy) }
                 width = old.width * scale
                 height = old.height * scale
             }
@@ -164,6 +168,15 @@ extension Annotation {
         return a
     }
 
+    private func scaledMarker(by scale: CGFloat, anchoredAt anchor: CGPoint, handleX hx: Int, handleY hy: Int) -> Annotation {
+        let d = min(max(diameter * scale, 14), 240)
+        var a = self
+        a.diameter = d
+        a.points = [CGPoint(x: hx == 0 ? anchor.x - d / 2 : anchor.x + d / 2,
+                            y: hy == 0 ? anchor.y - d / 2 : anchor.y + d / 2)]
+        return a
+    }
+
     // MARK: Style
 
     /// Text at a new font size, wrapping at the same places, with its top-left corner kept.
@@ -181,6 +194,7 @@ extension Annotation {
     func withSize(_ size: StrokeSize) -> Annotation {
         if tool == .text { return withFontSize(size.fontSize) }
         var a = self
+        if tool == .number { a.diameter = size.markerDiameter }
         a.lineWidth = size.lineWidth
         return a
     }

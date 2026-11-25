@@ -150,7 +150,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     /// Space between a mark's geometry and its dashed outline, so the outline clears the stroke.
     private func selectionPad(_ a: Annotation) -> CGFloat {
-        a.tool == .text ? 4 : a.effectiveLineWidth / 2 + 4
+        a.tool == .text || a.tool == .number ? 4 : a.effectiveLineWidth / 2 + 4
     }
 
     /// Box handles sit on the dashed outline, just outside the mark.
@@ -284,6 +284,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
             filled: state.fillShapes && state.tool.isShape,
             points: [p]
         )
+        if state.tool == .number {
+            current?.number = state.nextNumber
+            current?.diameter = state.size.markerDiameter
+        }
         invalidate(current)
     }
 
@@ -317,6 +321,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         case .pen, .highlighter:
             if let last = annotation.points.last, hypot(p.x - last.x, p.y - last.y) < 1 { return }
             annotation.points.append(p)
+        case .number:
+            // Dragging places the dot exactly before letting go.
+            annotation.points = [p]
         default:
             if event.modifierFlags.contains(.shift) {
                 p = Renderer.constrain(p, from: dragStart, tool: annotation.tool)
@@ -338,9 +345,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
             mouseMoved(with: event)
             return
         }
-        let isFreehand = annotation.tool == .pen || annotation.tool == .highlighter
+        let isPlaced = [.pen, .highlighter, .number].contains(annotation.tool)
         let size = annotation.shapeBounds
-        if isFreehand || max(size.width, size.height) >= 4 {
+        if isPlaced || max(size.width, size.height) >= 4 {
             state?.add(annotation) // triggers redraw of the overlay
         } else {
             invalidate(annotation)

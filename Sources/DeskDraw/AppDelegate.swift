@@ -144,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         B   Whiteboard on / off (asks before discarding it)
 
         P Pen · H Highlighter · L Line · A Arrow
-        R Rectangle · O Ellipse · T Text
+        R Rectangle · O Ellipse · T Text · N Numbered dots
         Shift while dragging: straight angles, squares, circles
         1–8   Colors      [ ]  or  - +   Size      F   Fill shapes
 

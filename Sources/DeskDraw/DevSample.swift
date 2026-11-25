@@ -18,6 +18,12 @@ enum DevSample {
         func mark(_ tool: Tool, _ c: PaletteColor, _ pts: [CGPoint], width: CGFloat = 6, filled: Bool = false) -> Annotation {
             Annotation(tool: tool, color: c.color, colorName: c.name, lineWidth: width, filled: filled, points: pts)
         }
+        func number(_ n: Int, _ c: PaletteColor, at p: CGPoint, diameter: CGFloat) -> Annotation {
+            var a = mark(.number, c, [p])
+            a.number = n
+            a.diameter = diameter
+            return a
+        }
         var text = Annotation(tool: .text, color: red.color, colorName: red.name, lineWidth: 0, filled: false,
                               text: "Fix this label", fontSize: 28)
         let attrs = Renderer.textAttributes(color: red.color, fontSize: 28)
@@ -34,6 +40,9 @@ enum DevSample {
             mark(.pen, blue, squiggle, width: 3),
             mark(.line, red, [CGPoint(x: 2050, y: -60), CGPoint(x: 2350, y: -60)]),
             text,
+            number(1, red, at: CGPoint(x: targetA.minX - 8, y: targetA.maxY + 8), diameter: 32),
+            number(2, yellow, at: CGPoint(x: targetB.maxX + 10, y: targetB.maxY + 10), diameter: 44),
+            number(12, blue, at: CGPoint(x: 2300, y: 40), diameter: 24),
         ]
         let caption = Capturer.Caption(
             icon: NSWorkspace.shared.icon(forFile: "/System/Applications/Notes.app"),

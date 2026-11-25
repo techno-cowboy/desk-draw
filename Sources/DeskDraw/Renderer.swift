@@ -60,6 +60,9 @@ enum Renderer {
         case .text:
             drawText(a, in: ctx)
 
+        case .number:
+            drawNumber(a, in: ctx)
+
         case .select:
             break
         }
@@ -111,6 +114,43 @@ enum Renderer {
         let glyphs = layout.glyphRange(for: layout.textContainers[0])
         layout.drawBackground(forGlyphRange: glyphs, at: .zero)
         layout.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+    }
+
+    // MARK: - Number dots
+
+    /// A filled dot with its number centered in it. A white ring and a soft shadow
+    /// keep it visible on any background.
+    private static func drawNumber(_ a: Annotation, in ctx: CGContext) {
+        let dot = a.shapeBounds
+        guard !dot.isNull, dot.width > 0 else { return }
+        let fill = a.color.usingColorSpace(.sRGB) ?? a.color
+        let isLight = luminance(fill) > 0.7
+        let ring = max(1.5, dot.width / 16)
+
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -1), blur: 4, color: NSColor.black.withAlphaComponent(0.35).cgColor)
+        ctx.setFillColor((isLight ? NSColor(white: 0.25, alpha: 1) : .white).cgColor)
+        ctx.fillEllipse(in: dot)
+        ctx.restoreGState()
+        ctx.setFillColor(fill.cgColor)
+        ctx.fillEllipse(in: dot.insetBy(dx: ring, dy: ring))
+
+        let label = "\(a.number)" as NSString
+        // Longer numbers get a smaller font so they still fit inside the dot.
+        let fontSize = dot.width * [0.56, 0.46, 0.36][min(max(label.length, 1), 3) - 1]
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .bold).rounded,
+            .foregroundColor: isLight ? NSColor.black : NSColor.white,
+        ]
+        let size = label.size(withAttributes: attributes)
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        label.draw(at: CGPoint(x: dot.midX - size.width / 2, y: dot.midY - size.height / 2), withAttributes: attributes)
+    }
+
+    private static func luminance(_ c: NSColor) -> CGFloat {
+        0.2126 * c.redComponent + 0.7152 * c.greenComponent + 0.0722 * c.blueComponent
     }
 
     // MARK: - Geometry helpers
@@ -173,5 +213,12 @@ enum Renderer {
         default:
             return p
         }
+    }
+}
+
+private extension NSFont {
+    /// The rounded variant of a system font, when there is one.
+    var rounded: NSFont {
+        fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: pointSize) } ?? self
     }
 }

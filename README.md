@@ -19,7 +19,7 @@ run `xattr -dr com.apple.quarantine "/Applications/Desk Draw.app"`. You can also
 
 1. Press **⌥⇧D** anywhere, or choose **Start Drawing** from the menu bar icon. A see-through layer
    with a pink frame covers the display under your mouse, and a toolbar appears at the top.
-2. Draw with the pen, highlighter, line, arrow, rectangle, ellipse or text tool.
+2. Draw with the pen, highlighter, line, arrow, rectangle, ellipse, text or number tool.
 3. Press **⌘S** or click **Capture** to take a screenshot. Choose what it covers first:
    - **Window**: the window you drew on, plus any marks that stick out of it
    - **Drawing**: just the area around your marks
@@ -43,6 +43,14 @@ the text. **Return** adds a new line; **⌘Return** or a click
 outside the text finishes the annotation. Double-click existing text to edit it, or drag it to
 move it. **Esc** cancels a text edit. Text edits and moves support undo and redo.
 
+### Numbering steps
+
+With the **Number** tool (**N**), each click places a colored dot with the next number in it: 1, 2,
+3 and so on. Drag before letting go to place it exactly. The next number is always one more than the
+highest number there, so removing a dot never leads to two with the same number; once all dots are
+gone, counting starts at 1 again. The current color and size apply, and like any mark a dot can be
+selected, moved, resized and restyled. Screenshot JSON lists each dot's number as its text.
+
 ### Whiteboard
 
 Click the whiteboard button in the toolbar, or press **B**, to cover the display with a white board.
@@ -63,7 +71,7 @@ display, stop drawing, move your mouse there, and start again.
 
 | Key | Action |
 | --- | --- |
-| V P H L A R O T | Select, Pen, Highlighter, Line, Arrow, Rectangle, Ellipse, Text |
+| V P H L A R O T N | Select, Pen, Highlighter, Line, Arrow, Rectangle, Ellipse, Text, Number |
 | Shift + drag | Straight angles, squares, circles |
 | 1–8 | Colors (also recolors the selected mark) |
 | `[` `]` or `-` `+` | Thinner / thicker (also the selected mark) |

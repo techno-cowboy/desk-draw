@@ -2,7 +2,7 @@ import AppKit
 import Observation
 
 enum Tool: String, CaseIterable, Identifiable {
-    case select, pen, highlighter, line, arrow, rectangle, ellipse, text
+    case select, pen, highlighter, line, arrow, rectangle, ellipse, text, number
 
     var id: String { rawValue }
 
@@ -16,6 +16,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .rectangle: "Rectangle"
         case .ellipse: "Ellipse"
         case .text: "Text"
+        case .number: "Number"
         }
     }
 
@@ -29,6 +30,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .rectangle: "rectangle"
         case .ellipse: "circle"
         case .text: "textformat"
+        case .number: "1.circle"
         }
     }
 
@@ -43,6 +45,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .rectangle: "r"
         case .ellipse: "o"
         case .text: "t"
+        case .number: "n"
         }
     }
 
@@ -55,13 +58,17 @@ enum StrokeSize: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var lineWidth: CGFloat { [3, 6, 12][rawValue] }
     var fontSize: CGFloat { [18, 28, 44][rawValue] }
+    /// Size of a number dot.
+    var markerDiameter: CGFloat { [24, 32, 44][rawValue] }
     var title: String { ["Thin", "Medium", "Thick"][rawValue] }
 
     /// The preset an annotation uses, if it still matches one exactly.
     init?(matching annotation: Annotation) {
-        let match = annotation.tool == .text
-            ? Self.allCases.first { $0.fontSize == annotation.fontSize }
-            : Self.allCases.first { $0.lineWidth == annotation.lineWidth }
+        let match = switch annotation.tool {
+        case .text: Self.allCases.first { $0.fontSize == annotation.fontSize }
+        case .number: Self.allCases.first { $0.markerDiameter == annotation.diameter }
+        default: Self.allCases.first { $0.lineWidth == annotation.lineWidth }
+        }
         guard let match else { return nil }
         self = match
     }
@@ -129,10 +136,15 @@ struct Annotation: Identifiable, Equatable {
     var fontSize: CGFloat = 0
     /// Preserve the editor's wrapping width while keeping textRect tight for hit testing and capture.
     var textLayoutWidth: CGFloat? = nil
+    /// A number dot's number, and its size. Its center is `points[0]`.
+    var number = 0
+    var diameter: CGFloat = 0
 
     /// Bounds including stroke width and arrow heads; used for redraw and cropping.
     var bounds: CGRect {
         if tool == .text { return textRect.insetBy(dx: -6, dy: -6) }
+        // Room for the dot's shadow.
+        if tool == .number { return shapeBounds.insetBy(dx: -6, dy: -6) }
         let pad = effectiveLineWidth * 2 + (tool == .arrow ? 20 : 0)
         return shapeBounds.insetBy(dx: -pad, dy: -pad)
     }
@@ -141,6 +153,9 @@ struct Annotation: Identifiable, Equatable {
     var shapeBounds: CGRect {
         if tool == .text { return textRect }
         guard let first = points.first else { return .null }
+        if tool == .number {
+            return CGRect(x: first.x - diameter / 2, y: first.y - diameter / 2, width: diameter, height: diameter)
+        }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
         for p in points {
             minX = min(minX, p.x); maxX = max(maxX, p.x)
@@ -187,6 +202,11 @@ final class DrawingState {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
     var color: NSColor { Palette.colors[colorIndex].color }
+    /// The number the next number dot gets: one more than the highest one there, so
+    /// removing a dot never leads to two with the same number.
+    var nextNumber: Int {
+        (annotations.lazy.filter { $0.tool == .number }.map(\.number).max() ?? 0) + 1
+    }
     var colorName: String { Palette.colors[colorIndex].name }
 
     func showToast(_ message: String, seconds: Double = 3) {

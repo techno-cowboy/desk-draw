@@ -99,7 +99,7 @@ struct ToolbarView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("\(size.title) ([ and ] change size; resizes the selected mark's line or text)")
+                .help("\(size.title) ([ and ] change size; resizes the selected mark's line, text or number dot)")
             }
             IconButton(symbol: state.fillShapes ? "square.fill" : "square", selected: state.fillShapes,
                        help: "Fill rectangles and ellipses (F)") {

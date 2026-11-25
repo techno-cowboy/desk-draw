@@ -93,8 +93,9 @@ remembered. A pending restart waits until you finish drawing.
 
 Versions 0.1.0 and 0.2.0 need one manual update: quit Desk Draw, download the new ZIP, and replace
 the existing app. Future updates can be installed from the app. The update feed and downloads are
-signed independently of the app's macOS code signature. Ad-hoc builds may still need renewed
-Screen Recording permission after an update.
+signed independently of the app's macOS code signature. From 0.6.1 on, releases keep the same
+signing identity, so macOS keeps the Screen Recording permission across updates. Updating to 0.6.1
+from an earlier version asks for it one last time.
 
 ## Screenshots and their context
 
@@ -123,8 +124,10 @@ You can turn the caption, JSON file, browser URL and clipboard copy on or off in
 ./scripts/build-app.sh --install  # also copies it to ~/Applications and launches it
 ```
 
-The app is signed ad hoc. macOS ties the Screen Recording permission to the signature, so after a
-rebuild you may have to turn Desk Draw off and on again under System Settings → Privacy & Security →
+macOS ties the Screen Recording permission to the app's signature. Builds are signed with the
+**Desk Draw** certificate when your keychain has it, which keeps the permission across rebuilds
+(see [Release process](docs/RELEASING.md)). Without it they are signed ad hoc, so after a rebuild
+you may have to turn Desk Draw off and on again under System Settings → Privacy & Security →
 Screen Recording.
 
 `DeskDraw --render-sample out.png` renders a test screenshot from a synthetic display. Use it to

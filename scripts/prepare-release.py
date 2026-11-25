@@ -44,6 +44,11 @@ def prepare(notes: Path, skip_build: bool) -> Path:
     if not info.get("SURequireSignedFeed") or not info.get("SUVerifyUpdateBeforeExtraction"):
         raise ValueError("Signed feeds and verification before extraction must be enabled")
     run("codesign", "--verify", "--deep", "--strict", str(app))
+    # An ad-hoc signature changes with every build, and macOS would ask every user for Screen
+    # Recording permission again after the update. A certificate keeps it.
+    signature = run("codesign", "-d", "-r-", str(app), capture_output=True, text=True)
+    if "certificate" not in signature.stdout + signature.stderr:
+        raise ValueError("The app is signed ad hoc; sign it with the Desk Draw certificate (docs/RELEASING.md)")
 
     feed = ROOT / "appcast.xml"
     if feed.exists():

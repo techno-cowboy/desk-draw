@@ -37,7 +37,8 @@ if [[ ! -f build/AppIcon.icns ]]; then
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# Defaults to ad-hoc signing; set DESKDRAW_SIGN_IDENTITY for Developer ID releases.
+# Signs with the "Desk Draw" certificate when present (ad hoc otherwise); set
+# DESKDRAW_SIGN_IDENTITY for Developer ID releases.
 ./scripts/sign-app.sh "$APP"
 
 if [[ -n "${DESKDRAW_NOTARY_PROFILE:-}" ]]; then

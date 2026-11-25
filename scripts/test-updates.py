@@ -57,7 +57,9 @@ def exercise(binary: Path, mode: str):
             })
             plist = app / "Contents/Info.plist"
             plist.write_bytes(plistlib.dumps(info))
-            signing_env = dict(os.environ, DESKDRAW_SIGN_IDENTITY="-")
+            # Sign the fixtures like releases (the Desk Draw certificate when present), so updates
+            # between certificate-signed apps are what this exercises.
+            signing_env = {k: v for k, v in os.environ.items() if k != "DESKDRAW_SIGN_IDENTITY"}
             run("./scripts/sign-app.sh", str(app), env=signing_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             newer = root / "New/Update Test.app"
             shutil.copytree(app, newer, symlinks=True)

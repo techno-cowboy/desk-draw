@@ -8,6 +8,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/techno-cowboy/desk-draw</link>
         <description>Signed Desk Draw releases for macOS.</description>
         <item>
+            <title>0.5.0</title>
+            <pubDate>Wed, 25 Nov 2026 12:05:34 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[🤖 Claude Opus 5.5 responding on behalf of Nils 🤘🏻
+
+Desk Draw now has a whiteboard.
+
+- Click the new whiteboard button in the toolbar, or press **B**, to cover the display with a white
+  board. All tools work on it, and white ink switches to black so it stays visible.
+- Press **⌘S** or click **Save** to save the whole board as an image. It goes to the screenshots
+  folder, is copied to the clipboard, and needs no Screen Recording permission.
+- Press **B** again to go back to drawing on the screen. Your marks stay.
+- A whiteboard with unsaved drawings is never discarded by accident. **Esc**, the close button,
+  **⌥⇧D**, **Stop Drawing** and **Quit** first ask whether to save it, discard it or keep drawing.
+- If the display layout changes while you draw, an unsaved whiteboard is saved before drawing stops.
+
+Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not notarized; macOS may require **Open Anyway** on first launch and renewed Screen Recording permission after an update.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.5.0/Desk-Draw-0.5.0.zip" length="1407886" type="application/octet-stream" sparkle:edSignature="wFE5xTrzfhevROgXbzgig7cWjSbYakV3I5UrzL+fU0uOueIgqi8jGldDRO4z/LyQSukixHGvQBJM1GQ+fRE5Aw=="/>
+        </item>
+        <item>
             <title>0.4.0</title>
             <pubDate>Thu, 19 Nov 2026 14:51:05 +0100</pubDate>
             <link>https://github.com/techno-cowboy/desk-draw</link>
@@ -60,6 +85,6 @@ Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: W/hKU+ssd8FWhR2Lhpz+GulnLaDhX3AFxB89JAiYXGRbP7bSwuQ+l9X5kZqJhJh2aCbHxCUhHwzY+Hh6VD6qCQ==
-length: 3988
+edSignature: ugVILYl4iowyMF6hC0U1kHYYuI7Q8YKYP2w59gKjdyG1HKsphqtn5mU7u5CSoNWzbxX5v6hvUEn2+WDVzb/LCA==
+length: 5851
 -->

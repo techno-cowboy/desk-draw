@@ -8,6 +8,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/techno-cowboy/desk-draw</link>
         <description>Signed Desk Draw releases for macOS.</description>
         <item>
+            <title>0.5.1</title>
+            <pubDate>Wed, 25 Nov 2026 12:13:10 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.5.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[🤖 Claude Opus 5.5 responding on behalf of Nils 🤘🏻
+
+Fixes closing an unsaved whiteboard.
+
+- The question whether to save or discard an unsaved whiteboard now appears in front of the board.
+  Before, it could open hidden behind the board, so Esc, the close button and the hotkey seemed to
+  do nothing and Desk Draw stopped responding.
+- The question now appears on the display you are drawing on.
+
+Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not notarized; macOS may require **Open Anyway** on first launch and renewed Screen Recording permission after an update.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.5.1/Desk-Draw-0.5.1.zip" length="1409556" type="application/octet-stream" sparkle:edSignature="rcVUdQ58jo9szrAxyi6gSFndor17YLYrIvEqPMWWHibF8UbTBDyysBtnQixtf6htN74nMyc3tb/JecGKL1CnAA=="/>
+        </item>
+        <item>
             <title>0.5.0</title>
             <pubDate>Wed, 25 Nov 2026 12:05:34 +0100</pubDate>
             <link>https://github.com/techno-cowboy/desk-draw</link>
@@ -85,6 +106,6 @@ Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: ugVILYl4iowyMF6hC0U1kHYYuI7Q8YKYP2w59gKjdyG1HKsphqtn5mU7u5CSoNWzbxX5v6hvUEn2+WDVzb/LCA==
-length: 5851
+edSignature: HumIyF8oTaooGuimdqF+Y7wPYqjyYgg9/oQ7D+8YujeAGcLSYhRzo+0wPOjiie0hOuy76PFAk3NEr2bq5yFVAg==
+length: 7289
 -->

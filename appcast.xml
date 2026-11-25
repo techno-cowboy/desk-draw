@@ -8,6 +8,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/techno-cowboy/desk-draw</link>
         <description>Signed Desk Draw releases for macOS.</description>
         <item>
+            <title>0.6.1</title>
+            <pubDate>Wed, 25 Nov 2026 12:46:24 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[🤖 Claude Opus 5.5 responding on behalf of Nils 🤘🏻
+
+No more Screen Recording prompts after updates.
+
+- Until now, macOS asked to allow Screen Recording again after every update, even though Desk Draw
+  was still listed as allowed. Desk Draw is now signed with its own certificate, so macOS recognizes
+  updated versions as the same app and keeps the permission.
+- After updating to 0.6.1, macOS asks one last time. Allow Desk Draw under System Settings →
+  Privacy & Security → Screen Recording, then quit and reopen it. Later updates keep the permission.
+
+Requires macOS 14 or later on Apple Silicon. This build is signed with Desk Draw's own certificate and not notarized; macOS may require **Open Anyway** on first launch.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.6.1/Desk-Draw-0.6.1.zip" length="1437405" type="application/octet-stream" sparkle:edSignature="TYaplcQJkSZnYl9OuI5OBSD/UhbiornUkqJX+wPgj9yfmbiSdhLuDILURnruLx/Nv/fKHhLaMMnhljFFOWnoCw=="/>
+        </item>
+        <item>
             <title>0.6.0</title>
             <pubDate>Wed, 25 Nov 2026 12:32:26 +0100</pubDate>
             <link>https://github.com/techno-cowboy/desk-draw</link>
@@ -130,6 +152,6 @@ Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: WgooK8752yWC9uwzk2dZ/QC8Pct/o6y0q46/xld3vSetdaLQWYunJkcM45Acfv7T2D13vHrFvuHzYQkgYLHgBQ==
-length: 9031
+edSignature: LBsyWrTQhA52UQ6QjwF8QZG9AMfgBSNiCbk82OZHXVG6Tmgz3Z4pVmes6dr4sF6y0lw0pjXmi+xk0xWl5k/HDw==
+length: 10602
 -->

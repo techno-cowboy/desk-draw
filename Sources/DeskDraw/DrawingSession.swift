@@ -21,8 +21,8 @@ final class DrawingSession {
     var onEnd: (() -> Void)?
 
     enum DiscardChoice { case save, discard, cancel }
-    /// Asks whether to throw away an unsaved whiteboard. Tests replace it.
-    var confirmDiscard: () -> DiscardChoice = DrawingSession.askToDiscard
+    /// Asks whether to throw away an unsaved whiteboard. Tests replace it; nil asks the user.
+    var confirmDiscard: (() -> DiscardChoice)?
 
     init(state: DrawingState) {
         self.state = state
@@ -84,7 +84,7 @@ final class DrawingSession {
             return true
         }
         isConfirming = true
-        let choice = confirmDiscard()
+        let choice = confirmDiscard?() ?? Self.askToDiscard(on: screen)
         isConfirming = false
         overlay?.makeKey()
         overlay?.canvas.updateCursor()
@@ -155,7 +155,8 @@ final class DrawingSession {
         return url
     }
 
-    private static func askToDiscard() -> DiscardChoice {
+    /// Asks with an alert on `screen`, above the overlay and the toolbar.
+    private static func askToDiscard(on screen: NSScreen?) -> DiscardChoice {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Discard the whiteboard?"
@@ -167,8 +168,23 @@ final class DrawingSession {
         discard.keyEquivalentModifierMask = .command
         let cancel = alert.addButton(withTitle: "Cancel")
         cancel.keyEquivalent = "\u{1b}"
-        // Above the overlay and the toolbar, which would otherwise hide it.
         alert.window.level = Levels.alert
+        // When Desk Draw isn't the active app, `runModal` puts the alert back at the normal
+        // modal level as it shows it. The overlay then covers it, and the hidden modal alert
+        // blocks everything. So raise it again once it shows, on the display being drawn on.
+        let window = alert.window
+        let visible = screen?.visibleFrame
+        RunLoop.current.perform(inModes: [.modalPanel]) {
+            window.level = Levels.alert
+            if let v = visible {
+                let f = window.frame
+                window.setFrameOrigin(CGPoint(x: (v.midX - f.width / 2).rounded(),
+                                              y: (v.minY + v.height * 2 / 3 - f.height / 2).rounded()))
+            }
+            window.orderFrontRegardless()
+        }
+        // Lets Return and Esc reach the alert, when macOS allows Desk Draw to activate.
+        NSApp.activate()
         NSCursor.arrow.set()
         switch alert.runModal() {
         case .alertFirstButtonReturn: return .save

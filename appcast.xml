@@ -8,6 +8,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/techno-cowboy/desk-draw</link>
         <description>Signed Desk Draw releases for macOS.</description>
         <item>
+            <title>0.7.0</title>
+            <pubDate>Thu, 26 Nov 2026 12:37:24 +0100</pubDate>
+            <link>https://github.com/techno-cowboy/desk-draw</link>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[Preview UI changes right over any app on your screen.
+
+- **Imagine** (**I**, or click **✦ Imagine** next to a circle, rectangle or ellipse): describe what
+  should change in the area you circled. A local coding agent replies with an HTML and CSS preview
+  that renders in place over the app—without changing any files.
+- **Works on any app**: no project folder is required. If Desk Draw finds the app's code (a
+  `localhost` dev server, a local build, or a folder you pick with **Add Code…**), the agent reads
+  it to match the app's real styles and components.
+- **Iterate, compare, copy, or apply**: revise the preview with follow-up prompts, toggle visibility
+  to compare with the app underneath, copy the handoff prompt + HTML, or optionally click **Apply
+  to Code** to let the agent make the real change with one-click **Keep**, **Discard** (via git
+  snapshot, keeping your own uncommitted work intact), and diff view.
+- **Agent support**: works out of the box with **Claude Code** (CLI), **Antigravity** (`agy acp`),
+  or any custom CLI/ACP agent under **Imagine Settings…**.
+
+Requires macOS 14 or later on Apple Silicon. This build is signed with Desk Draw's own certificate and not notarized; macOS may require **Open Anyway** on first launch.
+]]></description>
+            <enclosure url="https://github.com/techno-cowboy/desk-draw/releases/download/v0.7.0/Desk-Draw-0.7.0.zip" length="1704730" type="application/octet-stream" sparkle:edSignature="NG3Gdp53wi6wikz2pM2LXY5g1iiowKYpxG87npROb/48bg3JK+Pkhhcl1TH5geRvI6l9Aybmi/VkkKWI16wqBQ=="/>
+        </item>
+        <item>
             <title>0.6.1</title>
             <pubDate>Wed, 25 Nov 2026 12:46:24 +0100</pubDate>
             <link>https://github.com/techno-cowboy/desk-draw</link>
@@ -152,6 +179,6 @@ Requires macOS 14 or later on Apple Silicon. This build is ad-hoc signed and not
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: LBsyWrTQhA52UQ6QjwF8QZG9AMfgBSNiCbk82OZHXVG6Tmgz3Z4pVmes6dr4sF6y0lw0pjXmi+xk0xWl5k/HDw==
-length: 10602
+edSignature: tn+ti9oseT0Y/KBpvR3AIaSLtnSLlxcZxnMYBfKtZtjKGlNUkUaigV0lrVaKSBSFABNLGxmcb6CnrN25Wu4IBg==
+length: 12698
 -->

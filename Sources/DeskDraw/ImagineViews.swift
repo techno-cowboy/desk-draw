@@ -99,6 +99,9 @@ struct ImagineBoxView: View {
     @State private var sweep = false
 
     var body: some View {
+        let dimmed = imagine.isDimmed
+        let borderColor = dimmed ? cyan.opacity(imagine.isHoveringBox ? 0.55 : 0.18) : cyan
+        let borderWidth: CGFloat = dimmed ? (imagine.isHoveringBox ? 1.5 : 1) : 2
         ZStack {
             if imagine.isWorking {
                 Blur()
@@ -115,9 +118,11 @@ struct ImagineBoxView: View {
                     }
             }
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(cyan, style: StrokeStyle(lineWidth: 2, dash: imagine.isWorking ? [6, 4] : []))
+                .strokeBorder(borderColor, style: StrokeStyle(lineWidth: borderWidth, dash: imagine.isWorking ? [6, 4] : []))
         }
         .animation(.easeOut(duration: 0.35), value: imagine.phase)
+        .animation(.easeOut(duration: 0.2), value: imagine.isDimmed)
+        .animation(.easeOut(duration: 0.15), value: imagine.isHoveringBox)
     }
 
     private struct Blur: NSViewRepresentable {
@@ -136,9 +141,10 @@ struct ImagineBoxView: View {
 
 struct ImaginePillView: View {
     @Bindable var imagine: Imagine
-    let alignment: VerticalAlignment
+    @FocusState private var followUpFocused: Bool
 
     var body: some View {
+        let alignment: VerticalAlignment = imagine.pillAbove ? .bottom : .top
         VStack {
             if alignment == .bottom { Spacer(minLength: 0) }
             content
@@ -152,6 +158,14 @@ struct ImaginePillView: View {
         .frame(maxWidth: .infinity)
         .environment(\.colorScheme, .dark)
         .animation(.easeOut(duration: 0.2), value: imagine.phase)
+        .onChange(of: imagine.focusFollowUpTrigger) { followUpFocused = true }
+        .onExitCommand {
+            if imagine.phase == .preview, imagine.snippet != nil {
+                imagine.hidePill()
+            } else if imagine.phase == .preview {
+                imagine.close()
+            }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -197,12 +211,22 @@ struct ImaginePillView: View {
                 Text(text).font(.system(size: 12, weight: .medium)).lineLimit(2).help(text)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
-                PillButton(symbol: "xmark", title: nil, help: "Close the preview") { imagine.close() }
+                if hasPreview {
+                    HStack(spacing: 6) {
+                        PillButton(symbol: "trash", title: nil, help: "Remove the preview") { imagine.close() }
+                        PillButton(symbol: "xmark", title: nil, help: "Hide controls and keep the preview on screen") {
+                            imagine.hidePill()
+                        }
+                    }
+                } else {
+                    PillButton(symbol: "xmark", title: nil, help: "Close") { imagine.close() }
+                }
             }
             HStack(spacing: 6) {
                 TextField(hasPreview ? "Change something…" : "Add to the request…", text: $imagine.followUp)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                    .focused($followUpFocused)
                     .padding(.horizontal, 10)
                     .frame(height: 26)
                     .background(.white.opacity(0.1), in: Capsule())
@@ -216,7 +240,9 @@ struct ImaginePillView: View {
                         imagine.showsPreview.toggle()
                     }
                     PillButton(symbol: imagine.copied ? "checkmark" : "doc.on.doc", title: imagine.copied ? "Copied" : "Copy",
-                               help: "Copy the request and the preview's HTML, to make the change with any agent") { imagine.copy() }
+                               help: "Copy a screenshot of the preview with app context and implementation instructions for your coding AI") {
+                        imagine.copy()
+                    }
                     PillButton(symbol: "hammer", title: "Apply to Code", prominent: true,
                                help: imagine.project.map { "Have the agent change the code in \($0.lastPathComponent) to match" }
                                    ?? "Choose the app's project folder, and have the agent change its code to match") {

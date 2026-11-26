@@ -106,6 +106,21 @@ final class Imagine {
     var showsPreview = true {
         didSet { updateBox() }
     }
+    /// Whether the floating prompt/controls pill is currently shown. Closing the pill while
+    /// a preview is on screen hides it and dims the border so the preview stays immersive.
+    private(set) var isPillVisible = true {
+        didSet { updateBox() }
+    }
+    /// True while the pointer is over the preview frame.
+    private(set) var isHoveringBox = false {
+        didSet { updateBox() }
+    }
+    /// Dimmed immersive state: a preview is showing with the prompt/controls pill hidden.
+    var isDimmed: Bool { phase == .preview && snippet != nil && showsPreview && !isPillVisible }
+    /// Whether the pill is positioned above the frame (updates dynamically as the frame moves).
+    private(set) var pillAbove = true
+    /// Incremented to focus the follow-up prompt input when reopening the pill.
+    private(set) var focusFollowUpTrigger = 0
     /// What to change in the preview next.
     var followUp = ""
     private(set) var copied = false
@@ -122,21 +137,25 @@ final class Imagine {
 
     @ObservationIgnored private weak var session: DrawingSession?
     @ObservationIgnored private var box: CGRect = .zero
+    @ObservationIgnored private var originalBox: CGRect = .zero
     @ObservationIgnored private var screen: NSScreen?
     @ObservationIgnored private var projectKey = ""
     @ObservationIgnored private var promptPanel: ImaginePanel?
     @ObservationIgnored private var boxWindow: NSWindow?
+    @ObservationIgnored private var dragView: ImagineDragView?
     @ObservationIgnored private var pillPanel: ImaginePanel?
     @ObservationIgnored private var preview: ImaginePreview?
     @ObservationIgnored private var run: AgentRun?
     @ObservationIgnored private var shot: Capturer.ImagineShot?
     @ObservationIgnored private var asked = ""
+    @ObservationIgnored private var revisions: [String] = []
     @ObservationIgnored private var attachments: URL?
     @ObservationIgnored private var pages = 0
     @ObservationIgnored private var repo: URL?
     @ObservationIgnored private var before: String?
     @ObservationIgnored private var after: String?
     @ObservationIgnored private var guessTask: Task<Void, Never>?
+    @ObservationIgnored private var isCopying = false
 
     // MARK: Prompt
 
@@ -145,6 +164,7 @@ final class Imagine {
         closePromptPanel()
         self.session = session
         self.box = box
+        self.originalBox = box
         screen = session.screen
         request = note
         promptError = nil
@@ -156,7 +176,14 @@ final class Imagine {
         let window = context.contextWindow(for: box)
         let app = window?.app ?? context.frontApp
         let sameAppAsFront = window == nil || window?.pid == context.frontApp?.processIdentifier
-        let tabURL = sameAppAsFront ? context.browserTab?.url : nil
+        let tab: BrowserTab? = if sameAppAsFront, let existing = context.browserTab {
+            existing
+        } else if let app, Settings.browserURL {
+            Browser.currentTab(of: app)
+        } else {
+            nil
+        }
+        let tabURL = tab?.url
         let appName = app?.localizedName ?? window?.ownerName ?? "this app"
         targetName = tabURL.flatMap(ProjectLocator.localOrigin) ?? appName
         projectKey = ProjectLocator.key(app: app, appName: appName, tabURL: tabURL)
@@ -176,11 +203,20 @@ final class Imagine {
 
         let panel = ImaginePanel(size: CGSize(width: 420, height: 196), activates: true)
         panel.level = Levels.alert
+        panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(rootView: ImaginePromptView(imagine: self))
         place(panel, near: box, on: screen)
         promptPanel = panel
         panel.orderFrontRegardless()
         panel.makeKey()
+    }
+
+    /// Updates the Imagine box while prompting (when the user drags it on the overlay).
+    func updatePromptBox(_ newBox: CGRect) {
+        guard phase == .prompting else { return }
+        box = newBox
+        originalBox = newBox
+        if let promptPanel { place(promptPanel, near: newBox, on: screen) }
     }
 
     func cancelPrompt() {
@@ -263,12 +299,15 @@ final class Imagine {
                 if let project { remember(project) }
                 self.shot = shot
                 asked = text
+                revisions = []
                 attachments = folder
                 pages = 0
                 snippet = nil
                 note = ""
                 followUp = ""
                 showsPreview = true
+                isPillVisible = true
+                isHoveringBox = false
                 isSending = false
                 closePromptPanel()
                 // Stop drawing, so the preview and the app can be seen and compared.
@@ -303,18 +342,112 @@ final class Imagine {
             followUp = ""
             return imagine(change: nil)
         }
+        if !change.isEmpty { revisions.append(change) }
         imagine(change: change.isEmpty ? nil : change)
     }
 
+    /// Captures a screenshot of the implemented preview change, reads live app/browser context,
+    /// saves the PNG to the screenshots folder, and copies both the screenshot and full
+    /// implementation instructions for the project's coding AI to the clipboard.
     func copy() {
-        guard let snippet, let shot else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(Self.handoff(request: asked, shot: shot, box: box.size, html: snippet), forType: .string)
-        copied = true
+        guard let snippet, let shot, !isCopying else { return }
+        isCopying = true
+        let requestText = fullRequest
+        let noteText = note
+        let projectFolder = project
+        let boxSize = box.size
         Task {
+            defer { isCopying = false }
+            let liveTab: BrowserTab? = if let app = shot.app, Browser.isSupported(app), Settings.browserURL {
+                Browser.currentTab(of: app)
+            } else {
+                nil
+            }
+            let tabURL = liveTab?.url ?? shot.tabURL
+            let tabTitle = liveTab?.title ?? shot.tabTitle
+            let previewImage = await preview?.snapshotImage()
+            let now = Date()
+            let composite = Capturer.composeImaginePreview(
+                shot: shot, preview: previewImage, tabURL: tabURL, tabTitle: tabTitle,
+                includeCaption: Settings.caption, date: now
+            )
+            let saved = composite.map {
+                Capturer.saveImaginePreview($0, shot: shot, tabURL: tabURL, tabTitle: tabTitle, date: now)
+            }
+            let text = Self.handoff(
+                request: requestText, shot: shot, box: boxSize, html: snippet, note: noteText,
+                project: projectFolder, tabURL: tabURL, tabTitle: tabTitle, screenshot: saved?.url
+            )
+            Self.writeToPasteboard(.general, text: text, png: saved?.png, image: composite)
+            copied = true
             try? await Task.sleep(for: .seconds(1.5))
             copied = false
         }
+    }
+
+    /// Writes both the handoff instructions text and preview screenshot image to `pasteboard`.
+    static func writeToPasteboard(_ pasteboard: NSPasteboard, text: String, png: Data?, image: CGImage?) {
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        if let png { item.setData(png, forType: .png) }
+        if let image, let tiff = NSBitmapImageRep(cgImage: image).tiffRepresentation {
+            item.setData(tiff, forType: .tiff)
+        }
+        pasteboard.clearContents()
+        pasteboard.writeObjects([item])
+    }
+
+    /// The initial request plus any follow-up revisions the user made.
+    private var fullRequest: String {
+        guard !revisions.isEmpty else { return asked }
+        let steps = revisions.map { "- \($0)" }.joined(separator: "\n")
+        return "\(asked)\n\nFollow-up refinements:\n\(steps)"
+    }
+
+    /// Hides the prompt/controls window while keeping the preview on screen with a dimmed border.
+    func hidePill() {
+        guard phase == .preview, snippet != nil else { return close() }
+        showsPreview = true
+        isPillVisible = false
+        pillPanel?.orderOut(nil)
+    }
+
+    /// Shows the prompt/controls window next to the Imagine frame and optionally focuses its input.
+    func showPill(focusInput: Bool = true) {
+        guard isBusy else { return }
+        isPillVisible = true
+        isHoveringBox = false
+        if let pillPanel {
+            pillAbove = place(pillPanel, near: box, on: screen)
+            pillPanel.orderFrontRegardless()
+            if focusInput {
+                NSApp.activate()
+                pillPanel.makeKey()
+                focusFollowUpTrigger += 1
+            }
+        }
+    }
+
+    /// Moves the floating Imagine frame (and its pill, when shown) to a new global origin.
+    func moveBox(to origin: CGPoint) {
+        let moved = CGRect(origin: CGPoint(x: origin.x.rounded(), y: origin.y.rounded()), size: box.size)
+        box = moved
+        screen = Geometry.screen(containing: CGPoint(x: moved.midX, y: moved.midY)) ?? screen
+        boxWindow?.setFrameOrigin(CGPoint(x: moved.minX - 3, y: moved.minY - 3))
+        if isPillVisible, let pillPanel {
+            pillAbove = place(pillPanel, near: moved, on: screen)
+        }
+    }
+
+    /// Returns the floating Imagine frame to where the user originally circled.
+    func resetBoxPosition() {
+        guard box != originalBox else { return }
+        moveBox(to: originalBox.origin)
+    }
+
+    func setHoveringBox(_ hovering: Bool) {
+        guard isHoveringBox != hovering else { return }
+        isHoveringBox = hovering
     }
 
     private func showPreview(_ reply: PreviewSnippet.Reply) {
@@ -369,7 +502,7 @@ final class Imagine {
             after = nil
             changes = []
             let hasShot = FileManager.default.fileExists(atPath: shown.path)
-            let prompt = Self.applyPrompt(request: asked, shot: shot, folder: attachments,
+            let prompt = Self.applyPrompt(request: fullRequest, shot: shot, folder: attachments,
                                           rendered: hasShot ? shown : nil, html: html)
             let request = AgentRequest(project: root, prompt: prompt, mayEdit: true, attachments: attachments,
                                        images: Self.images(in: attachments) + (hasShot ? [shown] : []))
@@ -432,8 +565,14 @@ final class Imagine {
         agentMessage = ""
         problem = nil
         startedAt = Date()
+        isPillVisible = true
+        isHoveringBox = false
         self.phase = phase
         showJobWindows()
+        if let pillPanel {
+            pillAbove = place(pillPanel, near: box, on: screen)
+            pillPanel.orderFrontRegardless()
+        }
 
         let run = AgentRun(connection: Settings.imagineConnection, command: command,
                            allowCommands: Settings.imagineAllowCommands)
@@ -511,6 +650,7 @@ final class Imagine {
         boxWindow?.orderOut(nil)
         boxWindow?.close()
         boxWindow = nil
+        dragView = nil
         pillPanel?.orderOut(nil)
         pillPanel?.close()
         pillPanel = nil
@@ -519,9 +659,12 @@ final class Imagine {
         if let attachments { try? FileManager.default.removeItem(at: attachments) }
         attachments = nil
         shot = nil
+        revisions = []
         snippet = nil
         note = ""
         followUp = ""
+        isPillVisible = true
+        isHoveringBox = false
         repo = nil
         before = nil
         after = nil
@@ -553,6 +696,15 @@ final class Imagine {
         preview.webView.frame = container.bounds.insetBy(dx: 3, dy: 3)
         preview.webView.autoresizingMask = [.width, .height]
         container.addSubview(preview.webView)
+        let dragView = ImagineDragView(frame: container.bounds)
+        dragView.autoresizingMask = [.width, .height]
+        dragView.onDragStart = { [weak self] in self?.box.origin ?? .zero }
+        dragView.onDragTo = { [weak self] origin in self?.moveBox(to: origin) }
+        dragView.onDoubleClick = { [weak self] in self?.resetBoxPosition() }
+        dragView.onHover = { [weak self] hovering in self?.setHoveringBox(hovering) }
+        dragView.onImagineClick = { [weak self] in self?.showPill(focusInput: true) }
+        container.addSubview(dragView)
+        self.dragView = dragView
         self.preview = preview
         window.contentView = container
         window.setFrame(frame, display: false)
@@ -562,19 +714,24 @@ final class Imagine {
         let pill = ImaginePanel(size: CGSize(width: 560, height: 132), activates: false)
         pill.level = .floating
         pill.canHide = false
-        let above = place(pill, near: box, on: screen)
-        pill.contentView = FirstClickHostingView(rootView: ImaginePillView(imagine: self, alignment: above ? .bottom : .top))
+        pill.isMovableByWindowBackground = true
+        pillAbove = place(pill, near: box, on: screen)
+        pill.contentView = FirstClickHostingView(rootView: ImaginePillView(imagine: self))
         pill.orderFrontRegardless()
         pillPanel = pill
         updateBox()
     }
 
-    /// The preview shows, and takes the mouse, only while there is one to look at. Otherwise
-    /// clicks go to the app, so a change applied to the code can be tried out.
+    /// The preview shows while there is one to look at. The frame accepts mouse events for
+    /// dragging (and hover-to-reopen when dimmed) while imagining or showing a preview; when
+    /// hidden or applying/applied, clicks pass through to the app underneath.
     private func updateBox() {
         let showing = phase == .preview && snippet != nil && showsPreview
+        let movable = showing || phase == .imagining
         preview?.webView.isHidden = !showing
-        boxWindow?.ignoresMouseEvents = !showing
+        dragView?.isHidden = !movable
+        dragView?.setChipVisible(isDimmed && isHoveringBox)
+        boxWindow?.ignoresMouseEvents = !movable
     }
 
     /// Puts `panel` centered above `box`, or below it when there is no room. Returns
@@ -703,21 +860,214 @@ final class Imagine {
         """
     }
 
-    /// What Copy puts on the clipboard: enough for any agent or person to make the change.
-    static func handoff(request: String, shot: Capturer.ImagineShot, box: CGSize, html: String) -> String {
-        var place = shot.appName
-        if let title = shot.windowTitle, !title.isEmpty { place += " — \(title)" }
-        if let url = shot.tabURL { place += " (\(url))" }
-        return """
-        Change: \(request)
-        Where: \(place)
+    /// What Copy puts on the clipboard: full app/browser context, saved preview screenshot
+    /// path, instructions to implement using the project's design system and guardrails, and
+    /// the reference preview HTML/CSS.
+    static func handoff(
+        request: String, shot: Capturer.ImagineShot, box: CGSize, html: String,
+        note: String = "", project: URL? = nil, tabURL: String? = nil, tabTitle: String? = nil,
+        screenshot: URL? = nil
+    ) -> String {
+        let w = Int(box.width.rounded()), h = Int(box.height.rounded())
+        let resolvedURL = tabURL ?? shot.tabURL
+        let resolvedTabTitle = tabTitle ?? shot.tabTitle
+        var contextLines = ["- App: \(shot.appName)\(shot.app?.bundleIdentifier.map { " (\($0))" } ?? "")"]
+        if let title = shot.windowTitle, !title.isEmpty { contextLines.append("- Window: \(title)") }
+        if let resolvedTabTitle, !resolvedTabTitle.isEmpty, resolvedTabTitle != shot.windowTitle {
+            contextLines.append("- Browser Tab: \(resolvedTabTitle)")
+        }
+        if let resolvedURL, !resolvedURL.isEmpty { contextLines.append("- URL: \(resolvedURL)") }
+        if let project { contextLines.append("- Project: \(project.path)") }
+        contextLines.append("- Preview Area: \(w)×\(h) pt")
+        if let screenshot { contextLines.append("- Preview Screenshot: \(screenshot.path)") }
 
-        Preview of the area after the change, as HTML and CSS (\(Int(box.width.rounded()))×\(Int(box.height.rounded())) pt). It's a mock-up; make the real app look like it, using its own code and styles.
-
+        var sections: [String] = [
+            "Implement this UI change in the real project based on the Desk Draw Imagine preview.",
+            "## Request\n\(request)",
+            "## App Context\n\(contextLines.joined(separator: "\n"))",
+        ]
+        if !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sections.append("## Preview Summary\n\(note)")
+        }
+        sections.append("""
+        ## Instructions for Implementation
+        - Inspect the preview screenshot (attached / at the path above) and the reference HTML/CSS below to understand the intended visual change.
+        - Treat the HTML/CSS strictly as a visual mock-up—do not copy or paste it verbatim into the codebase.
+        - Implement the change using the project's existing design system and UI primitives (components, design tokens, theme variables, spacing, typography, colors, icons, light/dark mode, and accessibility conventions).
+        - Follow all project guardrails and conventions (e.g., AGENTS.md, CLAUDE.md, architecture boundaries, lint/type rules, state management, and responsive/interactive behavior).
+        - Keep the change focused on the targeted UI area; avoid refactoring unrelated code.
+        """)
+        sections.append("""
+        ## Reference Preview HTML/CSS (\(w)×\(h) pt)
         ```html
         \(html)
         ```
-        """
+        """)
+        return sections.joined(separator: "\n\n")
+    }
+}
+
+/// Transparent overlay on the floating Imagine frame: drags move the frame on first click
+/// (double-click returns it to where it started), tracks hover, and displays the `✦ Imagine`
+/// button when the prompt pill is hidden so the user can reopen it.
+final class ImagineDragView: NSView {
+    var onDragStart: (() -> CGPoint)?
+    var onDragTo: ((CGPoint) -> Void)?
+    var onDoubleClick: (() -> Void)?
+    var onHover: ((Bool) -> Void)?
+    var onImagineClick: (() -> Void)?
+
+    private var dragStartMouse: CGPoint?
+    private var dragStartOrigin: CGPoint?
+    private var didDrag = false
+    private let chipButton = ImagineChipButton()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        chipButton.isHidden = true
+        chipButton.alphaValue = 0
+        chipButton.onClick = { [weak self] in self?.onImagineClick?() }
+        addSubview(chipButton)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func layout() {
+        super.layout()
+        let compact = bounds.width < 108
+        chipButton.compact = compact
+        let size = CGSize(width: compact ? 36 : 94, height: 26)
+        let pad: CGFloat = 8
+        let x = bounds.width >= size.width + pad * 2 ? bounds.maxX - size.width - pad : (bounds.width - size.width) / 2
+        let y = bounds.height >= size.height + pad * 2 ? bounds.maxY - size.height - pad : (bounds.height - size.height) / 2
+        chipButton.frame = CGRect(origin: CGPoint(x: x.rounded(), y: y.rounded()), size: size)
+    }
+
+    func setChipVisible(_ visible: Bool) {
+        if visible {
+            needsLayout = true
+            chipButton.isHidden = false
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.14
+                chipButton.animator().alphaValue = 1
+            }
+        } else {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.12
+                chipButton.animator().alphaValue = 0
+            }, completionHandler: { [weak self] in
+                Task { @MainActor [weak self] in
+                    if self?.chipButton.alphaValue == 0 { self?.chipButton.isHidden = true }
+                }
+            })
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self
+        ))
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHover?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHover?(false)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            dragStartMouse = nil
+            onDoubleClick?()
+            return
+        }
+        dragStartMouse = NSEvent.mouseLocation
+        dragStartOrigin = onDragStart?()
+        didDrag = false
+        NSCursor.closedHand.set()
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let startMouse = dragStartMouse, let startOrigin = dragStartOrigin else { return }
+        let current = NSEvent.mouseLocation
+        let dx = current.x - startMouse.x
+        let dy = current.y - startMouse.y
+        if !didDrag, hypot(dx, dy) < 2 { return }
+        didDrag = true
+        onDragTo?(CGPoint(x: startOrigin.x + dx, y: startOrigin.y + dy))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if dragStartMouse != nil {
+            dragStartMouse = nil
+            dragStartOrigin = nil
+            NSCursor.openHand.set()
+        }
+    }
+}
+
+/// Sleek hover chip (`✦ Imagine`) shown over a dimmed preview frame to bring back the prompt input.
+private final class ImagineChipButton: NSView {
+    var onClick: (() -> Void)?
+    var compact = false { didSet { if compact != oldValue { needsDisplay = true } } }
+    private var pressed = false { didSet { needsDisplay = true } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        toolTip = "Show Imagine prompt and controls"
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                 xRadius: bounds.height / 2, yRadius: bounds.height / 2)
+        NSColor(white: pressed ? 0.18 : 0.08, alpha: 0.90).setFill()
+        shape.fill()
+        Capturer.imagineBoxColor.withAlphaComponent(0.9).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+
+        let text = compact ? "✦" : "✦ Imagine"
+        let title = NSMutableAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: NSColor.white,
+        ])
+        title.addAttribute(.foregroundColor, value: Capturer.imagineBoxColor, range: NSRange(location: 0, length: 1))
+        let size = title.size()
+        title.draw(at: CGPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        pressed = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let inside = bounds.contains(convert(event.locationInWindow, from: nil))
+        pressed = false
+        if inside { onClick?() }
     }
 }
 

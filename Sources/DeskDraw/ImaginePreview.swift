@@ -8,6 +8,7 @@ final class ImaginePreview: NSObject, WKNavigationDelegate {
     let webView: WKWebView
     private var page: URL?
     private var blocksNetwork = false
+    private var cachedSnapshot: CGImage?
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -30,6 +31,7 @@ final class ImaginePreview: NSObject, WKNavigationDelegate {
     /// Loads `page`, which may use files next to it, such as the screenshot of the area.
     func show(_ page: URL) {
         self.page = page
+        cachedSnapshot = nil
         Task {
             if !blocksNetwork, let rules = await Self.networkRules() {
                 webView.configuration.userContentController.add(rules)
@@ -42,14 +44,36 @@ final class ImaginePreview: NSObject, WKNavigationDelegate {
 
     func clear() {
         page = nil
+        cachedSnapshot = nil
         webView.loadHTMLString("", baseURL: nil)
+    }
+
+    /// The preview as it shows on screen, as a CGImage (falling back to the last cached
+    /// capture when the preview is temporarily hidden).
+    func snapshotImage() async -> CGImage? {
+        guard page != nil else { return nil }
+        if !webView.isHidden, let image = try? await webView.takeSnapshot(configuration: nil),
+           let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            cachedSnapshot = cg
+            return cg
+        }
+        return cachedSnapshot
     }
 
     /// The preview as it shows on screen, as PNG.
     func snapshot() async -> Data? {
-        guard page != nil, let image = try? await webView.takeSnapshot(configuration: nil),
-              let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
-        return bitmap.representation(using: .png, properties: [:])
+        guard let cg = await snapshotImage() else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let loaded = page else { return }
+        Task {
+            guard self.page == loaded, !webView.isHidden,
+                  let image = try? await webView.takeSnapshot(configuration: nil),
+                  let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            self.cachedSnapshot = cg
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,

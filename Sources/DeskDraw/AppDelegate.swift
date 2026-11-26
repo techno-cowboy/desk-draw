@@ -79,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(sectionHeader("Imagine"))
+        if Imagine.shared.isBusy {
+            menu.addItem(item("Close Imagine Preview", #selector(closeImagine)))
+        }
         menu.addItem(item("Imagine Settings…", #selector(showImagineSettings)))
 
         menu.addItem(.separator())
@@ -127,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleClipboard() { Settings.clipboard.toggle() }
 
     @objc private func showImagineSettings() { ImagineSettingsWindow.show() }
+    @objc private func closeImagine() { Imagine.shared.close() }
 
     @objc private func openFolder() {
         let folder = Settings.screenshotFolder

@@ -88,9 +88,16 @@ components.
 
 Once the preview appears, you can:
 
+- Drag the Imagine frame anywhere on screen (double-click to snap it back) to compare or move it
+  out of the way.
+- Click **✕** on the prompt bar (or press **Esc**) to hide the controls and dim the Imagine border
+  for an immersive preview. Hover over the preview to reveal **✦ Imagine** and bring the prompt
+  back, or click the trash button to remove the preview completely.
 - Type a follow-up and click **Revise** (or **Again** for another take) to refine it.
 - Toggle the eye button to hide and show the preview and compare it with the app underneath.
-- Click **Copy** to put the request and preview HTML on the clipboard for any agent or editor.
+- Click **Copy** to take a screenshot of the implemented preview change (saved in your screenshots
+  folder and copied to the clipboard) together with live app/browser tab context, reference HTML,
+  and instructions for your project's coding AI to follow its design system and guardrails.
 - Click **Apply to Code** (optional) to have the agent make the real change in the project's source
   code. If no folder is set yet, Desk Draw asks for one. When it finishes, the preview clears so
   you can see and try the changed app:

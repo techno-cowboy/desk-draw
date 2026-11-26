@@ -255,15 +255,35 @@ struct ImagineAgentParsingTests {
 
 @MainActor
 struct ImaginePromptTests {
+    private func solidImage(_ w: Int, _ h: Int, r: CGFloat = 0.2, g: CGFloat = 0.2, b: CGFloat = 0.2) -> CGImage {
+        let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(red: r, green: g, blue: b, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()!
+    }
+
+    private func pixel(_ image: CGImage, x: Int, yTop: Int) -> (r: UInt8, g: UInt8, b: UInt8) {
+        let data = CFDataGetBytePtr(image.dataProvider!.data!)!
+        let offset = yTop * image.bytesPerRow + x * 4
+        return (data[offset], data[offset + 1], data[offset + 2])
+    }
+
     private func shot() -> Capturer.ImagineShot {
-        func image(_ w: Int, _ h: Int) -> CGImage {
-            let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-            return ctx.makeImage()!
-        }
-        return Capturer.ImagineShot(marked: image(2000, 1200), area: image(640, 240), appName: "Safari", app: nil,
-                                    windowTitle: "Shop", tabURL: "http://localhost:5173/", marks: [],
-                                    boxInImage: CGRect(x: 100, y: 200, width: 640, height: 240))
+        Capturer.ImagineShot(
+            marked: solidImage(2000, 1200),
+            cleanWindow: solidImage(2000, 1200, r: 0.1, g: 0.1, b: 0.1),
+            area: solidImage(640, 240),
+            scale: 2,
+            appName: "Safari",
+            app: nil,
+            windowTitle: "Shop",
+            tabURL: "http://localhost:5173/",
+            tabTitle: "Desk Lamp — Shop",
+            marks: [],
+            boxInImage: CGRect(x: 100, y: 200, width: 640, height: 240)
+        )
     }
 
     @Test func previewsAskForReadOnlyHTMLOfTheBoxSize() {
@@ -285,17 +305,74 @@ struct ImaginePromptTests {
         #expect(revision.contains("<p>v1</p>") && revision.contains("Change it like this: a bit darker"))
     }
 
-    @Test func applyingPointsAtThePreview() {
+    @Test func applyingPointsAtThePreviewAndCopyIncludesContextAndGuardrails() {
         let folder = URL(fileURLWithPath: "/tmp/dd")
         let prompt = Imagine.applyPrompt(request: "Make the button green", shot: shot(), folder: folder,
                                          rendered: folder.appendingPathComponent("preview.png"),
                                          html: folder.appendingPathComponent("preview.html"))
         #expect(prompt.contains("/tmp/dd/preview.png") && prompt.contains("/tmp/dd/preview.html"))
         #expect(prompt.contains("not code to paste in"))
-        let copied = Imagine.handoff(request: "Make the button green", shot: shot(), box: CGSize(width: 320, height: 120), html: "<p>v1</p>")
-        #expect(copied.contains("Change: Make the button green"))
-        #expect(copied.contains("Where: Safari — Shop (http://localhost:5173/)"))
+
+        let screenshot = URL(fileURLWithPath: "/Users/nils/Pictures/Desk Draw/preview.png")
+        let copied = Imagine.handoff(
+            request: "Make the button green",
+            shot: shot(),
+            box: CGSize(width: 320, height: 120),
+            html: "<p>v1</p>",
+            note: "Green full-width Buy button.",
+            project: URL(fileURLWithPath: "/work/shop"),
+            tabURL: "https://app.example.com/checkout",
+            tabTitle: "Checkout",
+            screenshot: screenshot
+        )
+        #expect(copied.contains("Make the button green"))
+        #expect(copied.contains("- App: Safari"))
+        #expect(copied.contains("- Window: Shop"))
+        #expect(copied.contains("- Browser Tab: Checkout"))
+        #expect(copied.contains("- URL: https://app.example.com/checkout"))
+        #expect(copied.contains("- Project: /work/shop"))
+        #expect(copied.contains("- Preview Screenshot: /Users/nils/Pictures/Desk Draw/preview.png"))
+        #expect(copied.contains("Green full-width Buy button."))
+        #expect(copied.contains("design system"))
+        #expect(copied.contains("guardrails"))
         #expect(copied.contains("```html\n<p>v1</p>\n```"))
+    }
+
+    @Test func previewCompositePlacesThePreviewAtBoxInImageAndClipboardCarriesBoth() {
+        let base = solidImage(200, 120, r: 0.1, g: 0.1, b: 0.1)
+        let preview = solidImage(60, 40, r: 0.0, g: 0.9, b: 0.2)
+        let s = Capturer.ImagineShot(
+            marked: base, cleanWindow: base, area: preview, scale: 1,
+            appName: "Safari", app: nil, windowTitle: "Shop",
+            tabURL: "http://localhost:5173/", tabTitle: nil,
+            marks: [], boxInImage: CGRect(x: 40, y: 20, width: 60, height: 40)
+        )
+        let composed = Capturer.composeImaginePreview(shot: s, preview: preview, tabURL: s.tabURL, tabTitle: nil, includeCaption: false)
+        #expect(composed != nil)
+        if let composed {
+            let inside = pixel(composed, x: 70, yTop: 40)
+            let outside = pixel(composed, x: 10, yTop: 100)
+            #expect(inside.g > 180 && inside.r < 40)
+            #expect(outside.g < 40 && outside.r < 40)
+
+            let png = Capturer.pngData(composed, scale: 1, title: "Test", description: "Desc")
+            #expect(png != nil)
+            let pb = NSPasteboard(name: .init("DeskDrawImagineCopyTest-\(UUID().uuidString)"))
+            Imagine.writeToPasteboard(pb, text: "Implement this", png: png, image: composed)
+            #expect(pb.string(forType: .string) == "Implement this")
+            #expect(pb.data(forType: .png) == png)
+            pb.releaseGlobally()
+        }
+    }
+
+    @Test func supportedBrowsersAreRecognized() {
+        #expect(Browser.isSupported(bundleIdentifier: "com.apple.Safari"))
+        #expect(Browser.isSupported(bundleIdentifier: "com.google.Chrome"))
+        #expect(Browser.isSupported(bundleIdentifier: "company.thebrowser.Browser"))
+        #expect(Browser.isSupported(bundleIdentifier: "company.thebrowser.dia"))
+        #expect(Browser.isSupported(bundleIdentifier: "com.kagi.kagimacOS"))
+        #expect(!Browser.isSupported(bundleIdentifier: "com.apple.Terminal"))
+        #expect(!Browser.isSupported(bundleIdentifier: nil))
     }
 }
 

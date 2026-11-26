@@ -82,12 +82,26 @@ struct SessionContext {
 /// Reads the active tab of common scriptable browsers. The first use asks the
 /// user to allow Desk Draw to control that browser (Automation permission).
 enum Browser {
-    private static let safari: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview"]
+    private static let safari: Set<String> = [
+        "com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.kagi.kagimacOS",
+    ]
     private static let chromium: Set<String> = [
         "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.dev", "com.google.Chrome.canary",
-        "com.brave.Browser", "com.microsoft.edgemac", "company.thebrowser.Browser",
+        "com.brave.Browser", "com.brave.Browser.beta", "com.brave.Browser.nightly",
+        "com.microsoft.edgemac", "com.microsoft.edgemac.Beta", "com.microsoft.edgemac.Dev",
+        "company.thebrowser.Browser", "company.thebrowser.dia",
         "com.vivaldi.Vivaldi", "org.chromium.Chromium",
+        "com.operasoftware.Opera", "net.imput.helium", "ai.perplexity.comet",
     ]
+
+    static func isSupported(bundleIdentifier: String?) -> Bool {
+        guard let id = bundleIdentifier else { return false }
+        return safari.contains(id) || chromium.contains(id)
+    }
+
+    static func isSupported(_ app: NSRunningApplication) -> Bool {
+        isSupported(bundleIdentifier: app.bundleIdentifier)
+    }
 
     @MainActor
     static func currentTab(of app: NSRunningApplication) -> BrowserTab? {

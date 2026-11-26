@@ -42,6 +42,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     /// A new mark being drawn, or the live preview of a mark being moved or resized.
     private var current: Annotation?
     private var dragStart: CGPoint = .zero
+    private var draggingImagineOffset: CGPoint?
     private var textView: AnnotationTextView?
     private var editingText: Annotation?
     /// The mark as it was before the current move or resize.
@@ -240,8 +241,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     override func cursorUpdate(with event: NSEvent) { mouseMoved(with: event) }
     override func mouseMoved(with event: NSEvent) {
-        guard transforming == nil else { return }
+        guard transforming == nil, draggingImagineOffset == nil else { return }
         let p = global(event)
+        if let box = state?.imagineBox, box.contains(p) {
+            NSCursor.openHand.set()
+            return
+        }
         if let chip = imagineChip, chip.contains(p) {
             NSCursor.pointingHand.set()
             return
@@ -301,9 +306,14 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         let p = global(event)
         guard screenFrame.contains(p) else { return }
-        // Clicking away from the Imagine prompt cancels it.
-        if state.imagineBox != nil {
-            Imagine.shared.cancelPrompt()
+        // Drag inside the Imagine box to move it; clicking outside cancels the prompt.
+        if let box = state.imagineBox {
+            if box.contains(p) {
+                draggingImagineOffset = CGPoint(x: p.x - box.minX, y: p.y - box.minY)
+                NSCursor.closedHand.set()
+            } else {
+                Imagine.shared.cancelPrompt()
+            }
             return
         }
         if let chip = imagineChip, chip.contains(p) {
@@ -356,6 +366,15 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if let offset = draggingImagineOffset, let state, let box = state.imagineBox {
+            let p = global(event)
+            let x = min(max((p.x - offset.x).rounded(), screenFrame.minX), screenFrame.maxX - box.width)
+            let y = min(max((p.y - offset.y).rounded(), screenFrame.minY), screenFrame.maxY - box.height)
+            let moved = CGRect(origin: CGPoint(x: x, y: y), size: box.size)
+            state.imagineBox = moved
+            Imagine.shared.updatePromptBox(moved)
+            return
+        }
         guard var annotation = current else { return }
         let old = annotation.bounds
         var p = global(event)
@@ -399,6 +418,11 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if draggingImagineOffset != nil {
+            draggingImagineOffset = nil
+            mouseMoved(with: event)
+            return
+        }
         guard let annotation = current else { return }
         current = nil
         if let original = transforming {

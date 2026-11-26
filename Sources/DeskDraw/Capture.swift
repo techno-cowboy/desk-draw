@@ -157,12 +157,17 @@ enum Capturer {
     struct ImagineShot {
         /// The window with the user's marks and the imagine box drawn on it.
         var marked: CGImage
+        /// The same window region without marks or box, for compositing preview screenshots.
+        var cleanWindow: CGImage
         /// The imagine box alone, without marks, so nothing hides what is under them.
         var area: CGImage
+        /// Display pixel scale (pixels per point) of `marked` and `cleanWindow`.
+        var scale: CGFloat
         var appName: String
         var app: NSRunningApplication?
         var windowTitle: String?
         var tabURL: String?
+        var tabTitle: String?
         /// Marks in the marked image's pixels, top-left origin.
         var marks: [CaptureRecord.Mark]
         /// Where the imagine box is in the marked image's pixels, top-left origin.
@@ -192,6 +197,8 @@ enum Capturer {
                                  points: [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY)])
         guard let marked = compose(shot, screenFrame: screen.frame, region: region,
                                    annotations: annotations + [boxMark], caption: nil),
+              let cleanWindow = compose(shot, screenFrame: screen.frame, region: region,
+                                        annotations: [], caption: nil),
               let area = compose(shot, screenFrame: screen.frame, region: box.intersection(screen.frame).integral,
                                  annotations: [], caption: nil)
         else { throw CaptureError(message: "Could not compose the screenshot.") }
@@ -199,18 +206,119 @@ enum Capturer {
         let scale = CGFloat(shot.width) / screen.frame.width
         let app = window?.app ?? context.frontApp
         let sameAppAsFront = window == nil || window?.pid == context.frontApp?.processIdentifier
+        let tab: BrowserTab? = if sameAppAsFront, let existing = context.browserTab {
+            existing
+        } else if let app, Settings.browserURL {
+            Browser.currentTab(of: app)
+        } else {
+            nil
+        }
         return ImagineShot(
             marked: marked,
+            cleanWindow: cleanWindow,
             area: area,
+            scale: scale,
             appName: app?.localizedName ?? window?.ownerName ?? "Unknown app",
             app: app,
             windowTitle: window?.title,
-            tabURL: sameAppAsFront ? context.browserTab?.url : nil,
+            tabURL: tab?.url,
+            tabTitle: tab?.title,
             marks: marks(annotations, in: region, scale: scale),
             boxInImage: CGRect(x: ((box.minX - region.minX) * scale).rounded(),
                                y: ((region.maxY - box.maxY) * scale).rounded(),
                                width: (box.width * scale).rounded(), height: (box.height * scale).rounded())
         )
+    }
+
+    /// Renders the Imagine preview in context on top of the clean window screenshot, with a
+    /// subtle cyan outline around the changed area and an optional Desk Draw caption strip.
+    static func composeImaginePreview(
+        shot: ImagineShot, preview: CGImage?, tabURL: String?, tabTitle: String?,
+        includeCaption: Bool, date: Date = Date()
+    ) -> CGImage? {
+        let base = shot.cleanWindow
+        let scale = max(shot.scale, 1)
+        let width = base.width, height = base.height
+        let titleDetail = [shot.windowTitle, tabTitle].compactMap { $0?.isEmpty == false ? $0 : nil }.first
+        let caption: Caption? = includeCaption ? Caption(
+            icon: shot.app?.icon ?? shot.app?.bundleURL.map { NSWorkspace.shared.icon(forFile: $0.path) },
+            title: [shot.appName, titleDetail].compactMap { $0 }.joined(separator: " — "),
+            detail: [tabURL, "Imagine Preview", date.formatted(date: .abbreviated, time: .standard)]
+                .compactMap { $0 }.joined(separator: "  ·  ")
+        ) : nil
+        let footer = caption == nil ? 0 : Int((Caption.height * scale).rounded())
+        let space = base.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let ctx = CGContext(
+            data: nil, width: width, height: height + footer, bitsPerComponent: 8, bytesPerRow: 0,
+            space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+
+        ctx.draw(base, in: CGRect(x: 0, y: CGFloat(footer), width: CGFloat(width), height: CGFloat(height)))
+
+        // `boxInImage` has a top-left origin; flip into CGContext's bottom-left coordinates.
+        let boxRect = CGRect(
+            x: shot.boxInImage.minX,
+            y: CGFloat(footer) + CGFloat(height) - shot.boxInImage.maxY,
+            width: shot.boxInImage.width,
+            height: shot.boxInImage.height
+        )
+        let corner = 4 * scale
+        if let preview, !boxRect.isEmpty {
+            ctx.saveGState()
+            let clip = CGPath(roundedRect: boxRect, cornerWidth: corner, cornerHeight: corner, transform: nil)
+            ctx.addPath(clip)
+            ctx.clip()
+            ctx.interpolationQuality = .high
+            ctx.draw(preview, in: boxRect)
+            ctx.restoreGState()
+        }
+        if !boxRect.isEmpty {
+            ctx.saveGState()
+            let outline = CGPath(roundedRect: boxRect, cornerWidth: corner, cornerHeight: corner, transform: nil)
+            ctx.addPath(outline)
+            ctx.setStrokeColor(imagineBoxColor.withAlphaComponent(0.9).cgColor)
+            ctx.setLineWidth(2 * scale)
+            ctx.strokePath()
+            ctx.restoreGState()
+        }
+
+        if let caption {
+            ctx.saveGState()
+            ctx.scaleBy(x: scale, y: scale)
+            drawCaption(caption, width: CGFloat(width) / scale, in: ctx)
+            ctx.restoreGState()
+        }
+        return ctx.makeImage()
+    }
+
+    /// Encodes an Imagine preview screenshot as PNG and saves it in the screenshots folder.
+    static func saveImaginePreview(
+        _ image: CGImage, shot: ImagineShot, tabURL: String?, tabTitle: String?, date: Date = Date()
+    ) -> (url: URL?, png: Data?) {
+        let title = [shot.appName, shot.windowTitle ?? tabTitle, "Imagine Preview"]
+            .compactMap { $0 }.joined(separator: " — ")
+        var desc = ["App: \(shot.appName)\(shot.app?.bundleIdentifier.map { " (\($0))" } ?? "")"]
+        if let window = shot.windowTitle, !window.isEmpty { desc.append("Window: \(window)") }
+        if let tabTitle, !tabTitle.isEmpty { desc.append("Tab: \(tabTitle)") }
+        if let tabURL, !tabURL.isEmpty { desc.append("URL: \(tabURL)") }
+        guard let png = pngData(image, scale: max(shot.scale, 1), title: title,
+                                description: desc.joined(separator: "\n")) else {
+            return (nil, nil)
+        }
+        let folder = Settings.screenshotFolder
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let base = fileBase(date: date, app: shot.appName, title: "Imagine")
+            let url = uniqueURL(in: folder, base: base)
+            try png.write(to: url)
+            return (url, png)
+        } catch {
+            return (nil, png)
+        }
     }
 
     // MARK: - Whiteboard

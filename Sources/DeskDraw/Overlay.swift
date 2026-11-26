@@ -106,6 +106,11 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if state.tool == .select, editingText == nil, let selected = shownSelection {
             drawSelection(selected, in: ctx)
         }
+        if let box = state.imagineBox {
+            drawImagineBox(box, in: ctx)
+        } else if let chip = imagineChip, chip.intersects(visible) {
+            drawImagineChip(chip)
+        }
         ctx.restoreGState()
 
         // Frame that marks drawing mode. Never ends up in screenshots.
@@ -167,6 +172,52 @@ final class CanvasView: NSView, NSTextViewDelegate {
         return a.frame.isNull ? a.bounds : a.bounds.union(a.frame.insetBy(dx: -pad, dy: -pad))
     }
 
+    // MARK: Imagine
+
+    /// The "Imagine" button next to the latest circled area, in global coordinates.
+    var imagineChip: CGRect? {
+        guard let state, state.imagineBox == nil, textView == nil, let mark = state.imagineCandidate else { return nil }
+        let box = mark.imagineBox
+        let size = CGSize(width: 104, height: 26)
+        let area = screenFrame.insetBy(dx: 6, dy: 6)
+        var origin = CGPoint(x: box.maxX - size.width, y: box.maxY + 6)
+        if origin.y + size.height > area.maxY { origin.y = box.minY - 6 - size.height }
+        if origin.y < area.minY { origin.y = min(box.maxY, area.maxY) - size.height - 6 }
+        origin.x = min(max(origin.x, area.minX), area.maxX - size.width)
+        return CGRect(origin: origin, size: size).integral
+    }
+
+    private func drawImagineChip(_ chip: CGRect) {
+        let shape = NSBezierPath(roundedRect: chip, xRadius: chip.height / 2, yRadius: chip.height / 2)
+        NSColor(white: 0.08, alpha: 0.88).setFill()
+        shape.fill()
+        Capturer.imagineBoxColor.withAlphaComponent(0.9).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+        let title = NSMutableAttributedString(string: "✦ Imagine", attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: NSColor.white,
+        ])
+        title.addAttribute(.foregroundColor, value: Capturer.imagineBoxColor, range: NSRange(location: 0, length: 1))
+        title.append(NSAttributedString(string: "  I", attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor(white: 0.6, alpha: 1),
+        ]))
+        let size = title.size()
+        title.draw(at: CGPoint(x: chip.midX - size.width / 2, y: chip.midY - size.height / 2))
+    }
+
+    private func drawImagineBox(_ box: CGRect, in ctx: CGContext) {
+        ctx.saveGState()
+        defer { ctx.restoreGState() }
+        let path = CGPath(roundedRect: box, cornerWidth: 6, cornerHeight: 6, transform: nil)
+        ctx.addPath(path)
+        ctx.setFillColor(Capturer.imagineBoxColor.withAlphaComponent(0.08).cgColor)
+        ctx.fillPath()
+        ctx.addPath(path)
+        ctx.setLineWidth(2)
+        ctx.setStrokeColor(Capturer.imagineBoxColor.cgColor)
+        ctx.strokePath()
+    }
+
     func flash() {
         guard let layer else { return }
         let flash = CALayer()
@@ -191,6 +242,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
     override func mouseMoved(with event: NSEvent) {
         guard transforming == nil else { return }
         let p = global(event)
+        if let chip = imagineChip, chip.contains(p) {
+            NSCursor.pointingHand.set()
+            return
+        }
         switch state?.tool {
         case .text where text(at: p) != nil:
             NSCursor.openHand.set()
@@ -246,6 +301,15 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         let p = global(event)
         guard screenFrame.contains(p) else { return }
+        // Clicking away from the Imagine prompt cancels it.
+        if state.imagineBox != nil {
+            Imagine.shared.cancelPrompt()
+            return
+        }
+        if let chip = imagineChip, chip.contains(p) {
+            session?.beginImagine()
+            return
+        }
         if state.tool == .text {
             if let annotation = text(at: p) {
                 if event.clickCount >= 2 {
@@ -602,6 +666,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
             state.toggleFill()
         } else if key == "b" {
             state.toggleWhiteboard()
+        } else if key == "i" {
+            session.beginImagine()
         } else if key == "w" {
             state.captureTarget = .window
         } else if key == "d" {

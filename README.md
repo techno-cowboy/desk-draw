@@ -67,6 +67,64 @@ first.
 The session stays on the display where you started it, including screenshots. To annotate another
 display, stop drawing, move your mouse there, and start again.
 
+### Imagine
+
+Instead of only marking what should change in an app on screen, preview the change in place. Circle
+part of any app with the pen, or draw a rectangle or ellipse around it. An **✦ Imagine** button
+appears next to it; click it or press **I**. The circle becomes the imagine box, and Desk Draw asks
+what should change. Type it, or dictate it (press fn twice). Text you wrote next to the circle is
+already filled in. Press **Return**.
+
+Desk Draw stops drawing and hands the request to a coding agent on your Mac, with a screenshot of
+the window showing your marks and one of the circled area without them. While the agent works, the
+box is frosted and shows what it is doing. The agent doesn't touch any files; it replies with an
+HTML and CSS preview of the area, which Desk Draw renders right over the app (with scripts, network
+requests and link clicks blocked).
+
+No project folder is required—Imagine works on any app from the screenshots alone. If Desk Draw
+recognizes the app's code (a dev server on `localhost`, an app built from a local repository, or a
+folder you choose with **Add Code…**), the agent reads it to match the app's real styles, fonts and
+components.
+
+Once the preview appears, you can:
+
+- Type a follow-up and click **Revise** (or **Again** for another take) to refine it.
+- Toggle the eye button to hide and show the preview and compare it with the app underneath.
+- Click **Copy** to put the request and preview HTML on the clipboard for any agent or editor.
+- Click **Apply to Code** (optional) to have the agent make the real change in the project's source
+  code. If no folder is set yet, Desk Draw asks for one. When it finishes, the preview clears so
+  you can see and try the changed app:
+  - **Keep** leaves the changes in your project, uncommitted.
+  - **Discard** puts back exactly the files the agent changed and returns to the preview. Your own
+    uncommitted work stays.
+  - The diff button opens the changes as a `.diff` file.
+
+**Stop** ends the agent early; while applying, you can still keep or discard what it already
+changed. Applying to code needs the project to be a git repository, but Imagine never commits and
+doesn't change your branch, index or stash.
+
+#### Choosing the agent
+
+Choose **Imagine Settings…** in the menu bar menu, or the gear in the Imagine prompt:
+
+- **Claude Code** (command line, the default) uses two commands: a read-only preview command
+  (`--disallowedTools "Edit Write NotebookEdit Bash"`) and an apply command
+  (`--permission-mode acceptEdits`), which can edit files but not run commands.
+- **Antigravity** (ACP) runs `agy acp` and talks to it over the
+  [Agent Client Protocol](https://agentclientprotocol.com). Desk Draw approves reading the project
+  and the screenshots, and approves edits inside the project only when applying to code. It declines
+  everything else, including terminal commands, unless you turn on **Let the agent run terminal
+  commands when applying to code**.
+- **Custom**: any command. With **Command line**, both commands run in your login shell in the
+  project folder (or the screenshots' folder without one) and get the request in `$DESKDRAW_PROMPT`,
+  the screenshots in `$DESKDRAW_IMAGES` (folder: `$DESKDRAW_ATTACHMENTS`), the working folder in
+  `$DESKDRAW_PROJECT`, and `$DESKDRAW_MODE` (`preview` or `apply`). The preview command must not
+  change files and replies with the preview HTML; the apply command edits files without asking. Both
+  exit when done. With **ACP**, the command starts an ACP server on stdin and stdout.
+
+**Test Connection** checks that the command is there and, for ACP, that the agent answers. The
+settings also list the remembered project folders.
+
 ### Keys while drawing
 
 | Key | Action |
@@ -77,6 +135,7 @@ display, stop drawing, move your mouse there, and start again.
 | `[` `]` or `-` `+` | Thinner / thicker (also the selected mark) |
 | F | Fill rectangles and ellipses (also the selected one) |
 | B | Whiteboard on / off |
+| I | Imagine a change in the area you circled |
 | Arrow keys | Nudge the selected mark (Shift: 10 points) |
 | ⌘Z / ⇧⌘Z | Undo / redo |
 | ⌫ / ⌘⌫ | Delete the selected mark, or the last one / clear all |
@@ -116,6 +175,9 @@ You can turn the caption, JSON file, browser URL and clipboard copy on or off in
 - **Screen Recording**: needed to take screenshots and read window titles. macOS asks on first
   launch. After you allow it, quit and reopen Desk Draw.
 - **Automation**: macOS asks the first time Desk Draw reads a browser's tab URL.
+
+Imagine sends screenshots of the window you circled in, and the request, to the coding agent you
+choose. That agent may send them on to its model provider.
 
 ## Build
 

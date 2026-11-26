@@ -78,6 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        menu.addItem(sectionHeader("Imagine"))
+        menu.addItem(item("Imagine Settings…", #selector(showImagineSettings)))
+
+        menu.addItem(.separator())
         menu.addItem(sectionHeader("Updates"))
         let checkUpdates = item("Check for Updates…", #selector(AppUpdater.checkForUpdates(_:)))
         checkUpdates.target = updater
@@ -122,6 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleBrowser() { Settings.browserURL.toggle() }
     @objc private func toggleClipboard() { Settings.clipboard.toggle() }
 
+    @objc private func showImagineSettings() { ImagineSettingsWindow.show() }
+
     @objc private func openFolder() {
         let folder = Settings.screenshotFolder
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -150,6 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         ⌘Z / ⇧⌘Z   Undo / Redo      ⌫   Remove last
         ⌘⌫   Clear all
+
+        I   Imagine: circle something with the pen, a rectangle or an ellipse,
+              then say what should change to preview it in place
 
         W / D / S   Capture window / drawing area / screen
         ⌘S   Save screenshot with context (and copy it)

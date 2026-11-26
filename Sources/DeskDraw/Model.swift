@@ -184,6 +184,10 @@ final class DrawingState {
     }
     var toast: String?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
+    /// The imagine box while Imagine asks what should change, in global coordinates.
+    var imagineBox: CGRect? {
+        didSet { if imagineBox != oldValue { onChange?() } }
+    }
 
     private(set) var annotations: [Annotation] = []
     /// The mark the Select tool is working on.
@@ -366,6 +370,7 @@ final class DrawingState {
         redoStack = []
         toast = nil
         whiteboard = false
+        imagineBox = nil
         revision += 1
         onChange?()
     }

@@ -108,6 +108,7 @@ final class DrawingSession {
 
     func end() {
         guard let overlay else { return }
+        Imagine.shared.sessionDidEnd(self)
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         overlay.orderOut(nil)
@@ -145,6 +146,43 @@ final class DrawingSession {
                 state.showToast("Capture failed: \(error.localizedDescription)", seconds: 6)
             }
         }
+    }
+
+    /// Asks what should change in the area the latest circle, rectangle or ellipse marks.
+    func beginImagine() {
+        overlay?.canvas.commitText()
+        if state.whiteboard {
+            state.showToast("Imagine changes apps on screen, not the whiteboard.", seconds: 4)
+            return
+        }
+        guard let mark = state.imagineCandidate else {
+            state.showToast("Circle something first, with the pen, a rectangle or an ellipse. Then press I.", seconds: 5)
+            return
+        }
+        if Imagine.shared.phase == .preview {
+            // A preview on screen gives way to the next one.
+            Imagine.shared.close()
+        } else if Imagine.shared.isBusy {
+            let wait = Imagine.shared.phase == .applied ? "Keep or discard the last Imagine change first."
+                : "Imagine is still working. Wait for it, or stop it."
+            state.showToast(wait, seconds: 4)
+            return
+        }
+        guard let screen else { return }
+        let box = mark.imagineBox.intersection(screen.frame)
+        guard !box.isNull, box.width >= 8, box.height >= 8 else { return }
+        state.select(nil)
+        state.imagineBox = box
+        Imagine.shared.openPrompt(session: self, box: box, note: state.notes(near: box))
+    }
+
+    /// The Imagine prompt was cancelled; back to drawing.
+    func imaginePromptClosed() {
+        state.imagineBox = nil
+        guard let overlay else { return }
+        overlay.makeKey()
+        overlay.makeFirstResponder(overlay.canvas)
+        overlay.canvas.updateCursor()
     }
 
     private func saveWhiteboard() throws -> URL {

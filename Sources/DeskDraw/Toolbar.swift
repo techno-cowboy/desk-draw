@@ -122,6 +122,12 @@ struct ToolbarView: View {
                 state.toggleWhiteboard()
             }
 
+            IconButton(symbol: "sparkles", selected: state.imagineBox != nil,
+                       help: "Imagine: preview a change in the area you circled (I)") {
+                session.beginImagine()
+            }
+            .disabled(state.imagineCandidate == nil)
+
             separator
 
             // The whiteboard is always saved whole, so there is nothing to choose.

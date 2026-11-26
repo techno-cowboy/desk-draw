@@ -89,20 +89,7 @@ enum Capturer {
         }
 
         // 2. Grab the display without Desk Draw's own windows.
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-            throw CaptureError(message: "Could not find the display to capture.")
-        }
-        let pid = ProcessInfo.processInfo.processIdentifier
-        let own = content.windows.filter { $0.owningApplication?.processID == pid }
-        let filter = SCContentFilter(display: display, excludingWindows: own)
-        let config = SCStreamConfiguration()
-        let scale = screen.backingScaleFactor
-        config.width = Int(screen.frame.width * scale)
-        config.height = Int(screen.frame.height * scale)
-        config.showsCursor = false
-        config.captureResolution = .best
-        let shot = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        let shot = try await grab(screen, displayID: displayID)
 
         // 3. Describe the context.
         let app = window?.app ?? context.frontApp
@@ -144,6 +131,86 @@ enum Capturer {
                 annotations: marks(annotations, in: region, scale: pixelScale)
             )
         }
+    }
+
+    /// The whole display, without Desk Draw's own windows.
+    static func grab(_ screen: NSScreen, displayID: CGDirectDisplayID) async throws -> CGImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError(message: "Could not find the display to capture.")
+        }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let own = content.windows.filter { $0.owningApplication?.processID == pid }
+        let filter = SCContentFilter(display: display, excludingWindows: own)
+        let config = SCStreamConfiguration()
+        let scale = screen.backingScaleFactor
+        config.width = Int(screen.frame.width * scale)
+        config.height = Int(screen.frame.height * scale)
+        config.showsCursor = false
+        config.captureResolution = .best
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    // MARK: - Imagine
+
+    /// What the agent sees of an Imagine request.
+    struct ImagineShot {
+        /// The window with the user's marks and the imagine box drawn on it.
+        var marked: CGImage
+        /// The imagine box alone, without marks, so nothing hides what is under them.
+        var area: CGImage
+        var appName: String
+        var app: NSRunningApplication?
+        var windowTitle: String?
+        var tabURL: String?
+        /// Marks in the marked image's pixels, top-left origin.
+        var marks: [CaptureRecord.Mark]
+        /// Where the imagine box is in the marked image's pixels, top-left origin.
+        var boxInImage: CGRect
+    }
+
+    static let imagineBoxColor = NSColor(srgbRed: 0.10, green: 0.75, blue: 0.95, alpha: 1)
+
+    static func imagineShot(session: DrawingSession, box: CGRect) async throws -> ImagineShot {
+        guard CGPreflightScreenCaptureAccess() else {
+            CGRequestScreenCaptureAccess()
+            throw CaptureError(message: "Needs Screen Recording permission: System Settings → Privacy & Security, then restart Desk Draw.")
+        }
+        let context = session.context
+        guard let screen = session.screen ?? largestOverlap(with: box), let displayID = screen.displayID else {
+            throw CaptureError(message: "Could not find the display to capture.")
+        }
+        let annotations = session.state.annotations
+        let window = context.contextWindow(for: box)
+        let shot = try await grab(screen, displayID: displayID)
+
+        // The window, plus marks that start in it and stick out, plus the box itself.
+        var wanted = window?.frame ?? box.insetBy(dx: -240, dy: -160)
+        wanted = annotations.map(\.bounds).filter { $0.intersects(wanted) }.reduce(wanted.union(box)) { $0.union($1) }
+        let region = wanted.intersection(screen.frame).integral
+        let boxMark = Annotation(tool: .rectangle, color: imagineBoxColor, colorName: "Cyan", lineWidth: 3, filled: false,
+                                 points: [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.maxY)])
+        guard let marked = compose(shot, screenFrame: screen.frame, region: region,
+                                   annotations: annotations + [boxMark], caption: nil),
+              let area = compose(shot, screenFrame: screen.frame, region: box.intersection(screen.frame).integral,
+                                 annotations: [], caption: nil)
+        else { throw CaptureError(message: "Could not compose the screenshot.") }
+
+        let scale = CGFloat(shot.width) / screen.frame.width
+        let app = window?.app ?? context.frontApp
+        let sameAppAsFront = window == nil || window?.pid == context.frontApp?.processIdentifier
+        return ImagineShot(
+            marked: marked,
+            area: area,
+            appName: app?.localizedName ?? window?.ownerName ?? "Unknown app",
+            app: app,
+            windowTitle: window?.title,
+            tabURL: sameAppAsFront ? context.browserTab?.url : nil,
+            marks: marks(annotations, in: region, scale: scale),
+            boxInImage: CGRect(x: ((box.minX - region.minX) * scale).rounded(),
+                               y: ((region.maxY - box.maxY) * scale).rounded(),
+                               width: (box.width * scale).rounded(), height: (box.height * scale).rounded())
+        )
     }
 
     // MARK: - Whiteboard
@@ -226,7 +293,7 @@ enum Capturer {
     }
 
     /// Marks inside `region`, in image pixels with a top-left origin.
-    private static func marks(_ annotations: [Annotation], in region: CGRect, scale: CGFloat) -> [CaptureRecord.Mark] {
+    static func marks(_ annotations: [Annotation], in region: CGRect, scale: CGFloat) -> [CaptureRecord.Mark] {
         annotations.compactMap { a in
             let r = a.shapeBounds.intersection(region)
             guard !r.isNull else { return nil }
@@ -379,7 +446,7 @@ enum Capturer {
         return url
     }
 
-    private static func largestOverlap(with rect: CGRect?) -> NSScreen? {
+    static func largestOverlap(with rect: CGRect?) -> NSScreen? {
         guard let rect else { return nil }
         return NSScreen.screens
             .map { ($0, $0.frame.intersection(rect)) }
